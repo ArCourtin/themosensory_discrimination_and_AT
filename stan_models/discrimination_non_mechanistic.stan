@@ -55,15 +55,11 @@ transformed parameters{
 }
 model{
   //Priors
-  mu ~ normal(0,.5);
+  mu ~ normal(0,1);
   mu[1] ~ normal(-2,1);
-  mu[6] ~ normal(0,1);
   mu[11] ~ normal(-4,1);
   
-  tau ~ normal(0,.5);
-  tau[1] ~ normal(0,1);
-  tau[6] ~ normal(0,1);
-  tau[11] ~ normal(0,1);
+  tau ~ normal(0,1);
   
   L ~ lkj_corr_cholesky(1);
 

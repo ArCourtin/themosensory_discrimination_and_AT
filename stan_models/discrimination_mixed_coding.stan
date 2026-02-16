@@ -38,21 +38,19 @@ transformed parameters{
     lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
     
     vector[N] centered_stimulus = deviation_from_adapting_temperature - alpha[participant];
-    beta = 3/(sigma[participant]+2-relative_adapting_temperature);
+    beta = 3/(2+sigma[participant]+alpha[participant]-relative_adapting_temperature);
     vector[N] weight = inv_logit(centered_stimulus*100);
     
-    theta = (1-weight) .* 0.5 + (weight-lambda[participant]) .* Phi(beta[participant] .* centered_stimulus);  
+    theta = (1-weight) .* 0.5 + (weight-lambda[participant]) .* Phi(beta .* centered_stimulus);  
   }
 }
 model{
   //Priors
   mu[1] ~ normal(-2,1);
-  mu[2] ~ normal(0,1);
+  mu[2] ~ normal(1,1);
   mu[3] ~ normal(-4,1);
   
-  tau[1] ~ normal(0,1);
-  tau[2] ~ normal(0,1);
-  tau[3] ~ normal(0,1);
+  tau ~ normal(0,1);
   
   L ~ lkj_corr_cholesky(1);
 
