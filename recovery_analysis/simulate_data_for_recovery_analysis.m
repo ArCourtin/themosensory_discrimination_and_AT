@@ -30,15 +30,18 @@ for n=1:n_datasets
         absolute.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(absolute.dataset(n).mu_hlogit_lambda,absolute.dataset(n).tau_hlogit_lambda)));
     end
     
-%     x=30:.1:40;
-%     figure()
-%     hold on
-%     for p=1:n_participant
-%         plot(x,normcdf(x,absolute.dataset(n).participant(p).alpha+baseline_temperature+2,1/absolute.dataset(n).participant(p).beta))
-%     end
-%     hold off
-%     xlim([30 40])
-%     ylim([.5 1])
+    x=30:.1:40;
+    figure()
+    hold on
+    for p=1:n_participant
+        x_c=x-34-absolute.dataset(n).participant(p).alpha;
+        weight = inv_logit(x_c.*100);
+        theta = (1-weight) * 0.5 + (weight-0) .* normcdf(absolute.dataset(n).participant(p).beta .* x_c);
+        plot(x,theta)
+    end
+    hold off
+    xlim([30 40])
+    ylim([.5 1])
 end
 %% Generate group and participant parameters for the full adaptation model
 close all
@@ -57,48 +60,64 @@ for n=1:n_datasets
         relative.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(relative.dataset(n).mu_hlogit_lambda,relative.dataset(n).tau_hlogit_lambda)));
     end
     
-%     x=0:.1:10;
-%     figure()
-%     hold on
-%     for p=1:n_participant
-%         plot(x,normcdf(x,relative.dataset(n).participant(p).alpha,1/relative.dataset(n).participant(p).beta))
-%     end
-%     hold off
-%     xlim([0 10])
-%     ylim([.5 1])
+    x=0:.1:10;
+    figure()
+    hold on
+    for p=1:n_participant
+        x_c=x-relative.dataset(n).participant(p).alpha;
+        weight = inv_logit(x_c.*100);
+        theta = (1-weight) * 0.5 + (weight-0) .* normcdf(relative.dataset(n).participant(p).beta .* x_c);
+        plot(x,theta)
+    end
+    hold off
+    xlim([0 10])
+    ylim([.5 1])
 end
 %% Generate group and participant parameters for the partial adaptation model
 close all
 for n=1:n_datasets
-    mixed.dataset(n).mu_log_alpha=normrnd(-2,1);
-    mixed.dataset(n).mu_log_sigma=normrnd(0,1);
-    mixed.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
-    
-    mixed.dataset(n).tau_log_alpha=abs(normrnd(0,1));
-    mixed.dataset(n).tau_log_sigma=abs(normrnd(0,1));
-    mixed.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
-    
-    for p=1:n_participant
-        alpha=exp(normrnd(mixed.dataset(n).mu_log_alpha,mixed.dataset(n).tau_log_alpha));
-        sigma=exp(normrnd(mixed.dataset(n).mu_log_sigma,mixed.dataset(n).tau_log_sigma));
-        mixed.dataset(n).participant(p).alpha=alpha;
-        mixed.dataset(n).participant(p).sigma=sigma;
-        mixed.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(mixed.dataset(n).mu_hlogit_lambda,mixed.dataset(n).tau_hlogit_lambda)));
+    sat=1000;
+    while any((mean(sat)>45)+(sum(sat>50)))
+        mixed.dataset(n).mu_log_alpha=normrnd(-2,1);
+        mixed.dataset(n).mu_log_sigma=normrnd(1,1);
+        mixed.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
+
+        mixed.dataset(n).tau_log_alpha=abs(normrnd(0,1));
+        mixed.dataset(n).tau_log_sigma=abs(normrnd(0,1));
+        mixed.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
+
+        for p=1:n_participant
+            alpha=exp(normrnd(mixed.dataset(n).mu_log_alpha,mixed.dataset(n).tau_log_alpha));
+            sigma=exp(normrnd(mixed.dataset(n).mu_log_sigma,mixed.dataset(n).tau_log_sigma));
+            mixed.dataset(n).participant(p).alpha=alpha;
+            mixed.dataset(n).participant(p).sigma=sigma;
+            mixed.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(mixed.dataset(n).mu_hlogit_lambda,mixed.dataset(n).tau_hlogit_lambda)));
+        end
+        for p=1:n_participant
+            sat(p)=34+mixed.dataset(n).participant(p).sigma+mixed.dataset(n).participant(p).alpha;
+        end
     end
-%     
-%     x=-2:.1:10;
+%     x=30:.2:50;
 %     figure()
 %     hold on
 %     for p=1:n_participant
 %         for at=adapting_temperatures
-%             beta=3/(mixed.dataset(n).participant(p).sigma+2-(at-32));
-%             plot(x,normcdf(beta*(x-mixed.dataset(n).participant(p).alpha-(at-32))))
+%             x_r=x-at;
+%             x_c=x_r-mixed.dataset(n).participant(p).alpha;
+%             beta=3/(2+mixed.dataset(n).participant(p).sigma+mixed.dataset(n).participant(p).alpha-(at-32));
+%             weight = inv_logit(x_c.*100);
+%             theta = (1-weight) * 0.5 + (weight-0) .* normcdf(beta .* x_c);
+%             plot(x,theta)
 %         end
 %     end
 %     hold off
 %     ylim([.5 1])
+%     s(n,1:n_participant)=sat;
 end
-
+% plot(s,'o')
+% hold on
+% plot([1 50],45*ones(1,2))
+% hold off
 %% Initialize  generic PM (matching warm discrimination settings)
 close all
 PM = PAL_AMPM_setupPM( ...
@@ -318,9 +337,9 @@ for n=1:n_datasets
             for t=1:n_trial
                 relative_target = PMl.xCurrent;
                 absolute_target = relative_target + at;
-                
+           
                 centered_stimulus = relative_target - alpha;
-                beta = 3/(sigma+2-(at-32));
+                beta = 3/(34+sigma+alpha-at);
                 weight = inv_logit(centered_stimulus.*100);
                 theta = (1-weight) * 0.5 + (weight-lambda) .* normcdf(beta .* centered_stimulus);
                 
@@ -402,7 +421,7 @@ writetable(mixed_table, 'mixed_model_data.csv');
 
 %%
 function y=inv_logit(x) 
-    y=1/(1+exp(-x));
+    y=1./(1+exp(-x));
 end
 
 
