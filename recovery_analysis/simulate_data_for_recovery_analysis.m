@@ -232,7 +232,7 @@ for n=1:n_datasets
                 absolute.dataset(n).participant(p).condition(adx).choice_accuracy(t)=choice_accuracy;
             end
             
-            [target_temperatures] = determine_target_detection_at(PMl);
+            [target_temperatures] = determine_target_detection_at(PMl,at);
             for t=1:n_rating_trial
                 if mod(t,2)
                     tt=target_temperatures(1);
@@ -432,7 +432,7 @@ for n=1:n_datasets
                 relative.dataset(n).participant(p).condition(adx).choice_accuracy(t)=choice_accuracy;
             end
             
-            [target_temperatures] = determine_target_detection_at(PMl);
+            [target_temperatures] = determine_target_detection_at(PMl,at);
             for t=1:n_rating_trial
                 if mod(t,2)
                     tt=target_temperatures(1);
@@ -632,7 +632,7 @@ for n=1:n_datasets
                 mixed.dataset(n).participant(p).condition(adx).choice_accuracy(t)=choice_accuracy;
             end
             
-            [target_temperatures] = determine_target_detection_at(PMl);
+            [target_temperatures] = determine_target_detection_at(PMl,at);
             for t=1:n_rating_trial
                 if mod(t,2)
                     tt=target_temperatures(1);
@@ -799,7 +799,8 @@ writetable(mixed_table, 'mixed_model_rating_data.csv');
 function y=inv_logit(x) 
     y=1./(1+exp(-x));
 end
-function [target_temperatures] = determine_target_detection_at(PM)
+
+function [target_temperatures] = determine_target_detection_at(PM,at)
     x = PM.stimRange;
     
     for idx=1:length(x)
@@ -815,7 +816,13 @@ function [target_temperatures] = determine_target_detection_at(PM)
     [paramsValues, LL, scenario, output] = PAL_PFML_Fit(x, y, n, grid, [1 1 0 1], @PAL_Quick);
     paramsValues(4)=0;
     
-    target_temperatures = [32+PAL_Quick(paramsValues, 1-10^-3, 'Inverse') 32+8];
+    if scenario==1
+    else
+        paramsValues(1)=PM.threshold(end);
+        paramsValues(2)=10^(PM.slope(end));
+    end
+    
+    target_temperatures = [at+PAL_Quick(paramsValues, 1-10^-3, 'Inverse') at+8];
   
 end
 
