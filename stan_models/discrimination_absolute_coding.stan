@@ -5,6 +5,7 @@
 data{
   int N;
   int P;
+  int is_cold;
 
   vector[N] recorded_baseline_temperature;
   vector[N] absolute_target_temperature;
@@ -12,7 +13,12 @@ data{
   array[N] int<lower=1,upper=P> participant;
 }
 transformed data{
-  vector[N] target_temperature_centered_at_max_at = absolute_target_temperature - (recorded_baseline_temperature[participant]+2);
+  vector[N] target_temperature_centered_at_max_at;
+  if(is_cold==1){
+    target_temperature_centered_at_max_at = (recorded_baseline_temperature-2) - absolute_target_temperature;
+  }else{
+    target_temperature_centered_at_max_at = absolute_target_temperature - (recorded_baseline_temperature+2);
+  }
   int M=3;
 }
 parameters{
@@ -30,19 +36,19 @@ transformed parameters{
   {
     matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
 
-    alpha = exp(mu[1] + delta_participant[,1]);
+    alpha = mu[1] + delta_participant[,1];
     beta = exp(mu[2] + delta_participant[,2]);
     lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);  
     
     vector[N] centered_stimulus = target_temperature_centered_at_max_at - alpha[participant];
     vector[N] weight = inv_logit(centered_stimulus*100);
     
-    theta = (1-weight) .* 0.5 + (weight-lambda[participant]) .* Phi(beta[participant] .* centered_stimulus);  
+    theta = (1-weight) .* 0.5 + weight .* (1-lambda[participant]) .* Phi(beta[participant] .* centered_stimulus);  
   }
 }
 model{
   //Priors
-  mu[1] ~ normal(-2,1);
+  mu[1] ~ normal(0,1);
   mu[2] ~ normal(0,1);
   mu[3] ~ normal(-4,1);
   
@@ -58,6 +64,7 @@ model{
   choice_accuracy ~ bernoulli(theta);
 }
 generated quantities{
+  corr_matrix[M] cor = multiply_lower_tri_self_transpose(L);
   vector[N] log_lik;
   
   for(n in 1:N){

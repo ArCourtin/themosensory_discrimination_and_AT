@@ -5,6 +5,7 @@
 data{
   int N;
   int P;
+  int is_cold;
 
   vector[N] recorded_baseline_temperature;
   vector[N] absolute_target_temperature;
@@ -13,8 +14,18 @@ data{
   array[N] int<lower=1,upper=P> participant;
 }
 transformed data{
-  vector[N] deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
-  vector[N] relative_adapting_temperature = absolute_adapting_temperature - recorded_baseline_temperature;
+  vector[N] deviation_from_adapting_temperature;
+  vector[N] relative_adapting_temperature;
+  
+  if(is_cold==1){
+    deviation_from_adapting_temperature = absolute_adapting_temperature - absolute_target_temperature;
+    relative_adapting_temperature = recorded_baseline_temperature - absolute_adapting_temperature;
+  }else{
+    deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
+    relative_adapting_temperature = absolute_adapting_temperature - recorded_baseline_temperature;
+  }
+  
+  
   int M=3;
 }
 parameters{
@@ -41,7 +52,7 @@ transformed parameters{
     beta = 3/(2+sigma[participant]+alpha[participant]-relative_adapting_temperature);
     vector[N] weight = inv_logit(centered_stimulus*100);
     
-    theta = (1-weight) .* 0.5 + (weight-lambda[participant]) .* Phi(beta .* centered_stimulus);  
+    theta = (1-weight) .* 0.5 + weight .* (1-lambda[participant]) .* Phi(beta .* centered_stimulus);  
   }
 }
 model{
@@ -60,6 +71,7 @@ model{
   choice_accuracy ~ bernoulli(theta);
 }
 generated quantities{
+  corr_matrix[M] cor = multiply_lower_tri_self_transpose(L);
   vector[N] log_lik;
   
   for(n in 1:N){

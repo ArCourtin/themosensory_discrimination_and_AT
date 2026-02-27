@@ -1,10 +1,11 @@
-//This Stan program implements a hierarchical version of the "complete habituation - relative coding" model of thermosensory discrimination
+//This Stan program implements a hierarchical version of the non-mechanistic model of thermosensory discrimination
 //Licence: MIT
 //Author: Arthur S. Courtin
 
 data{
   int N;
   int P;
+  int is_cold;
 
   vector[N] absolute_target_temperature;
   vector[N] absolute_adapting_temperature;
@@ -13,8 +14,14 @@ data{
   array[N] int<lower=1,upper=P> participant;
 }
 transformed data{
-  vector[N] deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
-  int M=3;
+  vector[N] deviation_from_adapting_temperature;
+  
+  if(is_cold==1){
+    deviation_from_adapting_temperature = absolute_adapting_temperature - absolute_target_temperature;
+  }else{
+    deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
+  }
+  
   int C=5;
 }
 parameters{
@@ -32,11 +39,11 @@ transformed parameters{
   {
     matrix[1+C*2,P] delta_participant = diag_pre_multiply(tau, L) * z;
 
-    alpha[1,] = exp(mu[1] + delta_participant[1,]+mu[2] + delta_participant[2,]);
-    alpha[2,] = exp(mu[1] + delta_participant[1,]+mu[3] + delta_participant[3,]);
-    alpha[3,] = exp(mu[1] + delta_participant[1,]);
-    alpha[4,] = exp(mu[1] + delta_participant[1,]+mu[4] + delta_participant[4,]);
-    alpha[5,] = exp(mu[1] + delta_participant[1,]+mu[5] + delta_participant[5,]);
+    alpha[1,] = mu[1] + delta_participant[1,]+mu[2] + delta_participant[2,];
+    alpha[2,] = mu[1] + delta_participant[1,]+mu[3] + delta_participant[3,];
+    alpha[3,] = mu[1] + delta_participant[1,];
+    alpha[4,] = mu[1] + delta_participant[1,]+mu[4] + delta_participant[4,];
+    alpha[5,] = mu[1] + delta_participant[1,]+mu[5] + delta_participant[5,];
     
     beta[1,] = exp(mu[6] + delta_participant[6,]+mu[7] + delta_participant[7,]);
     beta[2,] = exp(mu[6] + delta_participant[6,]+mu[8] + delta_participant[8,]);
@@ -49,14 +56,13 @@ transformed parameters{
       real centered_stimulus = deviation_from_adapting_temperature[n] - alpha[adapting_temperature_idx[n],participant[n]];
       real weight = inv_logit(centered_stimulus*100);
       
-      theta[n] = (1-weight) * 0.5 + (weight-lambda[participant[n]]) * Phi(beta[adapting_temperature_idx[n],participant[n]] * centered_stimulus);  
+      theta[n] = (1-weight) * 0.5 + weight * (1-lambda[participant[n]]) * Phi(beta[adapting_temperature_idx[n],participant[n]] * centered_stimulus);  
     }  
   }
 }
 model{
   //Priors
   mu ~ normal(0,1);
-  mu[1] ~ normal(-2,1);
   mu[11] ~ normal(-4,1);
   
   tau ~ normal(0,1);
@@ -69,6 +75,7 @@ model{
   choice_accuracy ~ bernoulli(theta);
 }
 generated quantities{
+  corr_matrix[1+C*2] cor = multiply_lower_tri_self_transpose(L);
   vector[N] log_lik;
   
   for(n in 1:N){
