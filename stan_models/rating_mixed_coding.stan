@@ -4,6 +4,7 @@
 
 data{
   int N;
+  int D;
   int P;
   int is_cold;
 
@@ -11,25 +12,36 @@ data{
   vector[N] absolute_target_temperature;
   vector[N] absolute_adapting_temperature;
   vector<lower=0,upper=1>[N] rating;
-
-  array[N] int<lower=0,upper=1> choice_accuracy;
   array[N] int<lower=1,upper=P> participant;
+
+  vector[D] recorded_baseline_temperature_disc;
+  vector[D] absolute_target_temperature_disc;
+  vector[D] absolute_adapting_temperature_disc;
+  array[D] int<lower=0,upper=1> choice_accuracy;
+  array[D] int<lower=1,upper=P> participant_disc;
 }
 transformed data{
-  vector[N] deviation_from_adapting_temperature;
-  vector[N] deviation_from_adapting_temperature_centered;
-  vector[N] relative_adapting_temperature;
+  vector[D] deviation_from_adapting_temperature_disc;
+  vector[D] relative_adapting_temperature_disc;
   
   if(is_cold==1){
-    deviation_from_adapting_temperature = (absolute_adapting_temperature) - absolute_target_temperature;
+    deviation_from_adapting_temperature_disc = absolute_adapting_temperature_disc - absolute_target_temperature_disc;
+    relative_adapting_temperature_disc = recorded_baseline_temperature_disc - absolute_adapting_temperature_disc;
+  }else{
+    deviation_from_adapting_temperature_disc = absolute_target_temperature_disc - absolute_adapting_temperature_disc;
+    relative_adapting_temperature_disc = absolute_adapting_temperature_disc - recorded_baseline_temperature_disc;
+  }
+  
+  vector[N] deviation_from_adapting_temperature_centered;
+  vector[N] relative_adapting_temperature;
+
+  if(is_cold==1){
     deviation_from_adapting_temperature_centered = (absolute_adapting_temperature-4) - absolute_target_temperature;
     relative_adapting_temperature = recorded_baseline_temperature - absolute_adapting_temperature;
   }else{
-    deviation_from_adapting_temperature = absolute_target_temperature - (absolute_adapting_temperature);
     deviation_from_adapting_temperature_centered = absolute_target_temperature - (absolute_adapting_temperature+8);
     relative_adapting_temperature = absolute_adapting_temperature - recorded_baseline_temperature;
   }
-  
   
   int M=3+5;
 }
@@ -43,8 +55,8 @@ transformed parameters{
   vector[P] alpha;
   vector[P] sigma;
   vector[P] lambda;
-  vector[N] beta;
-  vector[N] theta;
+  vector[D] beta;
+  vector[D] theta;
   
   vector[P] intercept;
   vector[P] slope;
@@ -67,11 +79,11 @@ transformed parameters{
     upper_bound = exp(mu[7] + delta_participant[,7]);
     eta = exp(mu[8] + delta_participant[,8]);
     
-    vector[N] centered_stimulus = deviation_from_adapting_temperature - alpha[participant];
-    beta = 3/(2+sigma[participant]+alpha[participant]-relative_adapting_temperature);
-    vector[N] weight = inv_logit(centered_stimulus*100);
+    vector[D] centered_stimulus = deviation_from_adapting_temperature_disc - alpha[participant_disc];
+    beta = 3/(2+sigma[participant_disc]+alpha[participant_disc]-relative_adapting_temperature_disc);
+    vector[D] weight = inv_logit(centered_stimulus*100);
     
-    theta = (1-weight) .* 0.5 + weight .* (1-lambda[participant]) .* Phi(beta .* centered_stimulus);  
+    theta = (1-weight) .* 0.5 + weight .* (1-lambda[participant_disc]) .* Phi(beta .* centered_stimulus);  
     
     latent_representation = intercept[participant] + slope[participant] .* beta .* deviation_from_adapting_temperature_centered;
   }

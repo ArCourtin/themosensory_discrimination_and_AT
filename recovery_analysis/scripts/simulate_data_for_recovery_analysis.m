@@ -4,7 +4,7 @@
 
 %% General settings
 rng(12345)
-addpath(genpath([cd '\Palameses\']));
+addpath(genpath(fullfile(fileparts(cd), 'Palamedes')));
 
 n_datasets = 50;
 n_participant = 20;
@@ -320,8 +320,8 @@ absolute_table = cell2table(rows, ...
         'absolute_target_temperature', ...
         'choice_accuracy' ...
     });
-writetable(absolute_table, 'absolute_model_discrimination_data.csv');
-
+outputPath = fullfile(fileparts(cd), 'simulated_data', 'absolute_model_discrimination_data.csv');
+writetable(absolute_table, outputPath);
 %% Reformat and save the absolute coding rating simulations as csv
 rows={};
 row_idx=1;
@@ -393,7 +393,9 @@ absolute_table = cell2table(rows, ...
         'absolute_target_temperature', ...
         'rating' ...
     });
-writetable(absolute_table, 'absolute_model_rating_data.csv');
+outputPath = fullfile(fileparts(cd), 'simulated_data', 'absolute_model_rating_data.csv');
+writetable(absolute_table, outputPath);
+
 %% Simulate trial data for the relative model
 for n=1:n_datasets
     fprintf('Simulating relative coding dataset %i out of %i \n',n,n_datasets)
@@ -520,7 +522,9 @@ relative_table = cell2table(rows, ...
         'absolute_target_temperature', ...
         'choice_accuracy' ...
     });
-writetable(relative_table, 'relative_model_discrimination_data.csv');
+outputPath = fullfile(fileparts(cd), 'simulated_data', 'relative_model_discrimination_data.csv');
+writetable(relative_table, outputPath);
+
 %% Reformat and save the relative coding rating simulations as csv
 rows={};
 row_idx=1;
@@ -592,7 +596,9 @@ relative_table = cell2table(rows, ...
         'absolute_target_temperature', ...
         'rating' ...
     });
-writetable(relative_table, 'relative_model_rating_data.csv');
+outputPath = fullfile(fileparts(cd), 'simulated_data', 'relative_model_rating_data.csv');
+writetable(relative_table, outputPath);
+
 %% Simulate trial data for the mixed model
 for n=1:n_datasets
     fprintf('Simulating mixed coding dataset %i out of %i \n',n,n_datasets)
@@ -721,7 +727,9 @@ mixed_table = cell2table(rows, ...
         'absolute_target_temperature', ...
         'choice_accuracy' ...
     });
-writetable(mixed_table, 'mixed_model_discrimination_data.csv');
+outputPath = fullfile(fileparts(cd), 'simulated_data', 'mixed_model_discrimination_data.csv');
+writetable(mixed_table, outputPath);
+
 %% Reformat and save the mixed coding rating simulations as csv
 rows={};
 row_idx=1;
@@ -793,7 +801,9 @@ mixed_table = cell2table(rows, ...
         'absolute_target_temperature', ...
         'rating' ...
     });
-writetable(mixed_table, 'mixed_model_rating_data.csv');
+outputPath = fullfile(fileparts(cd), 'simulated_data', 'mixed_model_rating_data.csv');
+writetable(mixed_table, outputPath);
+
 
 %%
 function y=inv_logit(x) 

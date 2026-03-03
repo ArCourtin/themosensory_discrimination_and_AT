@@ -1,4 +1,4 @@
-# Script used to assess the model recovery results
+# Script used to assess the parameter recovery results for the discrimination models
 # Author: Arthur S. Courtin  
 # License: MIT (see LICENSE file) 
 
@@ -9,7 +9,7 @@ rm(list=ls())
 
 #### Extract and aggregate data ####
 model_data <-
-  read_csv("recovery_analysis/absolute_model_data.csv") %>%
+  read_csv("recovery_analysis/simulated_data/absolute_model_discrimination_data.csv") %>%
   mutate(
     relative_adapting_temperature =
       absolute_adapting_temperature - recorded_baseline_temperature,
@@ -17,7 +17,7 @@ model_data <-
   )
 
 model_data <-
-  read_csv("recovery_analysis/relative_model_data.csv") %>%
+  read_csv("recovery_analysis/simulated_data/relative_model_discrimination_data.csv") %>%
   mutate(
     relative_adapting_temperature =
       absolute_adapting_temperature - recorded_baseline_temperature,
@@ -27,7 +27,7 @@ model_data <-
   full_join(model_data)
 
 model_data <-
-  read_csv("recovery_analysis/mixed_model_data.csv") %>%
+  read_csv("recovery_analysis/simulated_data/mixed_model_discrimination_data.csv") %>%
   mutate(
     relative_adapting_temperature =
       absolute_adapting_temperature - recorded_baseline_temperature,
@@ -37,7 +37,7 @@ model_data <-
   full_join(model_data) %>% 
   filter(trial==1,participant==1,adapting_temperature_idx==1) %>% 
   pivot_longer(
-    cols=c('mu_log_alpha','mu_log_beta','mu_hlogit_lambda','tau_log_alpha','tau_log_beta','tau_hlogit_lambda','mu_log_sigma','tau_log_sigma'),
+    cols=c('mu_log_alpha','mu_alpha','mu_log_beta','mu_hlogit_lambda','tau_log_alpha','tau_alpha','tau_log_beta','tau_hlogit_lambda','mu_log_sigma','tau_log_sigma'),
     names_to='variable',
     values_to = 'truth'
     )
@@ -50,7 +50,7 @@ for(dataset in 1:50){
     mutate(
       dataset=dataset,
       model='a',
-      variable=c('mu_log_alpha','mu_log_beta','mu_hlogit_lambda','tau_log_alpha','tau_log_beta','tau_hlogit_lambda')
+      variable=c('mu_alpha','mu_log_beta','mu_hlogit_lambda','tau_alpha','tau_log_beta','tau_hlogit_lambda')
       ) %>% 
     bind_rows(result_summary)
 }
@@ -76,7 +76,10 @@ for(dataset in 101:150){
 pooled<-result_summary %>% 
   full_join(model_data) %>% 
   filter(!is.na(truth)) %>% 
-  mutate(model=factor(model,c('a','r','m'),c('absolute','relative','mixed')))
+  mutate(
+    model=factor(model,c('a','r','m'),c('absolute','relative','mixed')),
+    variable=factor(variable,c('mu_log_alpha','mu_alpha','mu_log_beta','mu_log_sigma','mu_hlogit_lambda','tau_log_alpha','tau_alpha','tau_log_beta','tau_log_sigma','tau_hlogit_lambda'))
+    )
 
 pooled %>% 
   ggplot()+

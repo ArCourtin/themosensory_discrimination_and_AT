@@ -1,4 +1,4 @@
-# Script used to assess the model recovery results
+# Script used to assess the model recovery results for the discrimination models
 # Author: Arthur S. Courtin  
 # License: MIT (see LICENSE file) 
 
@@ -184,31 +184,3 @@ results %>%
   ) +
   scale_fill_viridis_c(limits=c(0,1)) +
   theme_minimal()
-
-#### Diagnose the confoudn for mixed ####
-model_data <-
-  read_csv("recovery_analysis/mixed_model_data.csv") %>%
-  group_by(dataset) %>% 
-  summarise(
-    mu_log_alpha=mean(mu_log_alpha),
-    mu_log_sigma=mean(mu_log_sigma),
-    mu_hlogit_lambda=mean(mu_hlogit_lambda),
-    tau_log_alpha=mean(tau_log_alpha),
-    tau_log_sigma=mean(tau_log_sigma),
-    tau_hlogit_lambda=mean(tau_hlogit_lambda)
-  )
-for(generative in 3){
-  for(dataset in 1:50){
-    loo_r<-readRDS(paste0("recovery_analysis/results/loo/loo_",generative,"_2_",dataset+(generative-1)*50,".rds"))
-    loo_m<-readRDS(paste0("recovery_analysis/results/loo/loo_",generative,"_3_",dataset+(generative-1)*50,".rds"))
-
-    model_data$elpd_diff[dataset]<-loo_m$estimates[1]-loo_r$estimates[1]
- }
-}
-
-model_data %>% 
-  pivot_longer(cols=!c(dataset,elpd_diff)) %>% 
-  ggplot()+
-  geom_point(aes(x=value,y=elpd_diff))+
-  facet_wrap(name~.,scales = 'free')+
-  theme_classic()

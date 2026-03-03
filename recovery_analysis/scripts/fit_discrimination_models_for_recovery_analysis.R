@@ -61,7 +61,8 @@ fit_model <- function(iter_info) {
     absolute_adapting_temperature = sample_data$absolute_adapting_temperature,
     choice_accuracy               = sample_data$choice_accuracy,
     participant                   = sample_data$participant,
-    adapting_temperature_idx      = sample_data$adapting_temperature_idx
+    adapting_temperature_idx      = sample_data$adapting_temperature_idx,
+    is_cold=0
   )
   
   mod <- compiled_models[[iter_info$model]]
@@ -125,7 +126,7 @@ names(compiled_models) <- models
 
 #### Extract and aggregate data ####
 model_data <-
-  read_csv("recovery_analysis/absolute_model_data.csv") %>%
+  read_csv("recovery_analysis/simulated_data/absolute_model_discrimination_data.csv") %>%
   mutate(
     relative_adapting_temperature =
     absolute_adapting_temperature - recorded_baseline_temperature,
@@ -133,7 +134,7 @@ model_data <-
     )
 
 model_data <-
-  read_csv("recovery_analysis/relative_model_data.csv") %>%
+  read_csv("recovery_analysis/simulated_data/relative_model_discrimination_data.csv") %>%
   mutate(
     relative_adapting_temperature =
     absolute_adapting_temperature - recorded_baseline_temperature,
@@ -143,7 +144,7 @@ model_data <-
   full_join(model_data)
 
 model_data <-
-  read_csv("recovery_analysis/mixed_model_data.csv") %>%
+  read_csv("recovery_analysis/simulated_data/mixed_model_discrimination_data.csv") %>%
   mutate(
     relative_adapting_temperature =
       absolute_adapting_temperature - recorded_baseline_temperature,
@@ -153,7 +154,7 @@ model_data <-
   full_join(model_data)
 
 #### Prepare lists for fitting runs ##############
-mod_comb<-expand_grid(dataset=48:100,fitted=3)
+mod_comb<-expand_grid(dataset=1:150,fitted=1:4)
 iter_info<-list()
 for(m in 1:dim(mod_comb)[1]){
   iter_info[[m]]<-
