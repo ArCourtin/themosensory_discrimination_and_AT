@@ -15,20 +15,20 @@ data{
 }
 transformed data{
   vector[N] deviation_from_adapting_temperature;
-  
   if(is_cold==1){
     deviation_from_adapting_temperature = absolute_adapting_temperature - absolute_target_temperature;
   }else{
     deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
   }
   
+  int M=11;
   int C=5;
 }
 parameters{
-  vector[1+C*2] mu;
-  vector<lower=0>[1+C*2] tau;
-  matrix[1+C*2,P] z;
-  cholesky_factor_corr[1+C*2] L;
+  vector[M] mu;
+  vector<lower=0>[M] tau;
+  matrix[M,P] z;
+  cholesky_factor_corr[M] L;
 }
 transformed parameters{
   matrix[C,P] alpha;
@@ -37,26 +37,26 @@ transformed parameters{
   vector[N] theta;
   
   {
-    matrix[1+C*2,P] delta_participant = diag_pre_multiply(tau, L) * z;
+    matrix[M,P] delta_participant = diag_pre_multiply(tau, L) * z;
 
-    alpha[1,] = mu[1] + delta_participant[1,]+mu[2] + delta_participant[2,];
-    alpha[2,] = mu[1] + delta_participant[1,]+mu[3] + delta_participant[3,];
-    alpha[3,] = mu[1] + delta_participant[1,];
-    alpha[4,] = mu[1] + delta_participant[1,]+mu[4] + delta_participant[4,];
-    alpha[5,] = mu[1] + delta_participant[1,]+mu[5] + delta_participant[5,];
+    alpha[1] = mu[1] + delta_participant[1]+mu[2] + delta_participant[2];
+    alpha[2] = mu[1] + delta_participant[1]+mu[3] + delta_participant[3];
+    alpha[3] = mu[1] + delta_participant[1];
+    alpha[4] = mu[1] + delta_participant[1]+mu[4] + delta_participant[4];
+    alpha[5] = mu[1] + delta_participant[1]+mu[5] + delta_participant[5];
     
-    beta[1,] = exp(mu[6] + delta_participant[6,]+mu[7] + delta_participant[7,]);
-    beta[2,] = exp(mu[6] + delta_participant[6,]+mu[8] + delta_participant[8,]);
-    beta[3,] = exp(mu[6] + delta_participant[6,]);
-    beta[4,] = exp(mu[6] + delta_participant[6,]+mu[9] + delta_participant[9,]);
-    beta[5,] = exp(mu[6] + delta_participant[6,]+mu[10] + delta_participant[10,]);
+    beta[1] = exp(mu[6] + delta_participant[6]+mu[7] + delta_participant[7]);
+    beta[2] = exp(mu[6] + delta_participant[6]+mu[8] + delta_participant[8]);
+    beta[3] = exp(mu[6] + delta_participant[6]);
+    beta[4] = exp(mu[6] + delta_participant[6]+mu[9] + delta_participant[9]);
+    beta[5] = exp(mu[6] + delta_participant[6]+mu[10] + delta_participant[10]);
     
-    lambda = .5 * inv_logit(mu[11] + delta_participant[11,]);
+    lambda = .5 * inv_logit(mu[11] + delta_participant[11]);
     for(n in 1:N){
       real centered_stimulus = deviation_from_adapting_temperature[n] - alpha[adapting_temperature_idx[n],participant[n]];
-      real weight = inv_logit(centered_stimulus*100);
+      real stimulus_representation = centered_stimulus * inv_logit(100*centered_stimulus);
       
-      theta[n] = (1-weight) * 0.5 + weight * (1-lambda[participant[n]]) * Phi(beta[adapting_temperature_idx[n],participant[n]] * centered_stimulus);  
+      theta[n] = lambda[participant[n]] + (1-2*lambda[participant[n]]) * Phi(beta[adapting_temperature_idx[n],participant[n]] * stimulus_representation);  
     }  
   }
 }
@@ -75,7 +75,7 @@ model{
   choice_accuracy ~ bernoulli(theta);
 }
 generated quantities{
-  corr_matrix[1+C*2] cor = multiply_lower_tri_self_transpose(L);
+  corr_matrix[M] cor = multiply_lower_tri_self_transpose(L);
   vector[N] log_lik;
   
   for(n in 1:N){

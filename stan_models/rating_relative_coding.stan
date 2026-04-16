@@ -13,11 +13,11 @@ data{
   array[N] int<lower=1,upper=P> participant;
 }
 transformed data{
-  vector[N] deviation_from_adapting_temperature_centered;
+  vector[N] deviation_from_adapting_temperature;
   if(is_cold==1){
-    deviation_from_adapting_temperature_centered = (absolute_adapting_temperature-4) - absolute_target_temperature;
+    deviation_from_adapting_temperature = absolute_adapting_temperature - absolute_target_temperature;
   }else{
-    deviation_from_adapting_temperature_centered = absolute_target_temperature - (absolute_adapting_temperature+8);
+    deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
   }
   int M=5;
 }
@@ -45,7 +45,7 @@ transformed parameters{
     upper_bound = exp(mu[4] + delta_participant[,4]);
     eta = exp(mu[5] + delta_participant[,5]);
     
-    latent_representation = intercept[participant] + slope[participant] .* deviation_from_adapting_temperature_centered;
+    latent_representation = intercept[participant] + slope[participant] .* deviation_from_adapting_temperature;
   }
   vector[N] mu_rating = inv_logit(latent_representation);
 }

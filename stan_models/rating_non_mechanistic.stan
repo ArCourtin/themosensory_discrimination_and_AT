@@ -10,19 +10,19 @@ data{
   vector[N] absolute_target_temperature;
   vector[N] absolute_adapting_temperature;
   vector<lower=0,upper=1>[N] rating;
-  
   array[N] int adapting_temperature_idx;
   array[N] int<lower=1,upper=P> participant;
 }
 transformed data{
-  vector[N] deviation_from_adapting_temperature_centered;
+  vector[N] deviation_from_adapting_temperature;
   if(is_cold==1){
-    deviation_from_adapting_temperature_centered = (absolute_adapting_temperature-4) - absolute_target_temperature;
+    deviation_from_adapting_temperature = absolute_adapting_temperature - absolute_target_temperature;
   }else{
-    deviation_from_adapting_temperature_centered = absolute_target_temperature - (absolute_adapting_temperature+8);
+    deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
   }
+  
+  int M=13;
   int C=5;
-  int M=3+C*2;
 }
 parameters{
   vector[M] mu;
@@ -33,33 +33,33 @@ parameters{
 transformed parameters{
   matrix[C,P] intercept;
   matrix[C,P] slope;
-  vector[P] lower_bound;
-  vector[P] upper_bound;
-  vector[P] eta;
+  row_vector[P] lower_bound;
+  row_vector[P] upper_bound;
+  row_vector[P] eta;
   
   vector[N] latent_representation;
   
   {
     matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
 
-    intercept[1,] = mu[1] + delta_participant[1,]+mu[2] + delta_participant[2,];
-    intercept[2,] = mu[1] + delta_participant[1,]+mu[3] + delta_participant[3,];
-    intercept[3,] = mu[1] + delta_participant[1,];
-    intercept[4,] = mu[1] + delta_participant[1,]+mu[4] + delta_participant[4,];
-    intercept[5,] = mu[1] + delta_participant[1,]+mu[5] + delta_participant[5,];
+    intercept[1] = mu[1] + delta_participant[1] + mu[2] + delta_participant[2];
+    intercept[2] = mu[1] + delta_participant[1] + mu[3] + delta_participant[3];
+    intercept[3] = mu[1] + delta_participant[1];
+    intercept[4] = mu[1] + delta_participant[1] + mu[4] + delta_participant[4];
+    intercept[5] = mu[1] + delta_participant[1] + mu[5] + delta_participant[5];
     
-    slope[1,] = exp(mu[6] + delta_participant[6,]+mu[7] + delta_participant[7,]);
-    slope[2,] = exp(mu[6] + delta_participant[6,]+mu[8] + delta_participant[8,]);
-    slope[3,] = exp(mu[6] + delta_participant[6,]);
-    slope[4,] = exp(mu[6] + delta_participant[6,]+mu[9] + delta_participant[9,]);
-    slope[5,] = exp(mu[6] + delta_participant[6,]+mu[10] + delta_participant[10,]);
+    slope[1] = exp(mu[6] + delta_participant[6] + mu[7] + delta_participant[7]);
+    slope[2] = exp(mu[6] + delta_participant[6] + mu[8] + delta_participant[8]);
+    slope[3] = exp(mu[6] + delta_participant[6]);
+    slope[4] = exp(mu[6] + delta_participant[6] + mu[9] + delta_participant[9]);
+    slope[5] = exp(mu[6] + delta_participant[6] + mu[10] + delta_participant[10]);
     
-    lower_bound = exp(mu[11] + delta_participant[,11]);
-    upper_bound = exp(mu[12] + delta_participant[,12]);
-    eta = exp(mu[13] + delta_participant[,13]);
+    lower_bound = exp(mu[11] + delta_participant[11]);
+    upper_bound = exp(mu[12] + delta_participant[12]);
+    eta = exp(mu[13] + delta_participant[13]);
     
     for(n in 1:N){
-      latent_representation[n] = intercept[adapting_temperature_idx[n],participant[n]] + slope[adapting_temperature_idx[n],participant[n]] .* deviation_from_adapting_temperature_centered[n];
+      latent_representation[n] = intercept[participant[n],adapting_temperature_idx[n]] + slope[participant[n],adapting_temperature_idx[n]] .* deviation_from_adapting_temperature[n];
     }
   }
   vector[N] mu_rating = inv_logit(latent_representation);

@@ -67,6 +67,7 @@ fit_model <- function(iter_info) {
     
     absolute_adapting_temperature =
       sample_rating_data$absolute_adapting_temperature,
+    adapting_temperature_idx      = sample_rating_data$adapting_temperature_idx,
     
     rating =
       sample_rating_data$rating,
@@ -212,7 +213,7 @@ rating_data <-
   full_join(rating_data)
 
 #### Prepare lists for fitting runs ##############
-mod_comb<-expand_grid(dataset=1:150,fitted=1:4)
+mod_comb<-expand_grid(dataset=101:150,fitted=4)
 iter_info<-list()
 for(m in 1:dim(mod_comb)[1]){
   iter_info[[m]]<-
@@ -226,12 +227,12 @@ for(m in 1:dim(mod_comb)[1]){
 
 plan(multisession, workers = 4)
 
-# results<-future_map(
-#   iter_info,
-#   ~fit_model(.x),
-#   .options = furrr_options(
-#     seed = T,
-#     scheduling = F,
-#     stdout = F,
-#     conditions = character()),
-#   .progress = F)
+results<-future_map(
+  iter_info,
+  ~fit_model(.x),
+  .options = furrr_options(
+    seed = T,
+    scheduling = F,
+    stdout = F,
+    conditions = character()),
+  .progress = F)

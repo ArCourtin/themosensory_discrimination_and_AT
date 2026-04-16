@@ -13,11 +13,11 @@ data{
   array[N] int<lower=1,upper=P> participant;
 }
 transformed data{
-  vector[N] target_temperature_centered_at_max_fixed;
+  vector[N] centered_absolute_target_temperature;
   if(is_cold==1){
-    target_temperature_centered_at_max_fixed = (recorded_baseline_temperature-2-4) - absolute_target_temperature;
+    centered_absolute_target_temperature = recorded_baseline_temperature - absolute_target_temperature;
   }else{
-    target_temperature_centered_at_max_fixed = absolute_target_temperature - (recorded_baseline_temperature+2+8);
+    centered_absolute_target_temperature = absolute_target_temperature - recorded_baseline_temperature;
   }
   int M=5;
 }
@@ -45,7 +45,7 @@ transformed parameters{
     upper_bound = exp(mu[4] + delta_participant[,4]);
     eta = exp(mu[5] + delta_participant[,5]);
     
-    latent_representation = intercept[participant] + slope[participant] .* target_temperature_centered_at_max_fixed;
+    latent_representation = intercept[participant] + slope[participant] .* centered_absolute_target_temperature;
   }
   vector[N] mu_rating = inv_logit(latent_representation);
 }

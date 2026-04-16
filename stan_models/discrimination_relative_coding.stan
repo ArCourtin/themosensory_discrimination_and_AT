@@ -42,9 +42,9 @@ transformed parameters{
     lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
     
     vector[N] centered_stimulus = deviation_from_adapting_temperature - alpha[participant];
-    vector[N] weight = inv_logit(centered_stimulus*100);
-    
-    theta = (1-weight) .* 0.5 + weight .* (1-lambda[participant]) .* Phi(beta[participant] .* centered_stimulus);  
+    vector[N] stimulus_representation = centered_stimulus .* inv_logit(100*centered_stimulus);
+
+    theta =  lambda[participant] + (1-2*lambda[participant]) .* Phi(beta[participant] .* stimulus_representation);  
   }
 }
 model{

@@ -184,3 +184,5 @@ results %>%
   ) +
   scale_fill_viridis_c(limits=c(0,1)) +
   theme_minimal()
+
+ggsave('recovery_analysis/figures/MR_D.png',units = 'cm',width = 14,height = 10)

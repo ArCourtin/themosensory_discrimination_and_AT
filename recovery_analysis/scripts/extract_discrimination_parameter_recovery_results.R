@@ -97,5 +97,5 @@ pooled %>%
   theme_classic()+
   labs(x='True value', y='Estimated value')
 
-
+ggsave('recovery_analysis/figures/PR_D.png',units = 'cm',width = 30,height = 20)
 

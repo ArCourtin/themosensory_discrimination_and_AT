@@ -1,4 +1,4 @@
-%Script to simulate data from the three "strong" discrimination models
+%Script to simulate data from the "mechanistic" discrimination models
 %Licence: MIT
 %Author: Arthur S. Courtin
 
@@ -14,12 +14,17 @@ n_rating_trial = 10;
 baseline_temperature = 32;
 adapting_temperatures = baseline_temperature + (-2:2);
 
-%% Generate group and participant parameters for the no adaptation model
+%% Generate group and participant parameters for the absolute model
 close all
 for n=1:n_datasets
-    alpha=-10;
-    while any(alpha<-4)
-        absolute.dataset(n).mu_alpha=normrnd(0,1);
+    alpha(1:n_participant)=-10;
+    while any(alpha<-2)
+        m_a=-10;
+        while m_a<-2
+            m_a=normrnd(0,2);
+        end
+        absolute.dataset(n).mu_alpha=m_a;
+        absolute.dataset(n).mu_log_rho=normrnd(2,2);
         absolute.dataset(n).mu_log_beta=normrnd(0,1);
         absolute.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
 
@@ -29,7 +34,8 @@ for n=1:n_datasets
         absolute.dataset(n).mu_log_ub=normrnd(2,.5);
         absolute.dataset(n).mu_log_eta=normrnd(3,1);
 
-        absolute.dataset(n).tau_alpha=abs(normrnd(0,1));
+        absolute.dataset(n).tau_alpha=abs(normrnd(0,2));
+        absolute.dataset(n).tau_log_rho=abs(normrnd(0,2));
         absolute.dataset(n).tau_log_beta=abs(normrnd(0,1));
         absolute.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
 
@@ -42,6 +48,7 @@ for n=1:n_datasets
         for p=1:n_participant
             alpha(p)=normrnd(absolute.dataset(n).mu_alpha,absolute.dataset(n).tau_alpha);
             absolute.dataset(n).participant(p).alpha=alpha(p);
+            absolute.dataset(n).participant(p).rho=exp(normrnd(absolute.dataset(n).mu_log_rho,absolute.dataset(n).tau_log_rho));
             absolute.dataset(n).participant(p).beta=exp(normrnd(absolute.dataset(n).mu_log_beta,absolute.dataset(n).tau_log_beta));
             absolute.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(absolute.dataset(n).mu_hlogit_lambda,absolute.dataset(n).tau_hlogit_lambda)));
 
@@ -52,20 +59,40 @@ for n=1:n_datasets
             absolute.dataset(n).participant(p).eta=exp(normrnd(absolute.dataset(n).mu_log_eta,absolute.dataset(n).tau_log_eta));
         end
     end
-%     x=30:.1:40;
-%     figure()
-%     hold on
-%     for p=1:n_participant
-%         x_c=x-34-absolute.dataset(n).participant(p).alpha;
-%         weight = inv_logit(x_c.*100);
-%         theta = (1-weight) * 0.5 + (weight-0) .* normcdf(absolute.dataset(n).participant(p).beta .* x_c);
-%         plot(x,theta)
-%     end
-%     hold off
-%     xlim([30 40])
-%     ylim([.5 1])
+    x=30:.1:40;
+    figure
+    hold on
+    for p=1:n_participant
+        alpha=absolute.dataset(n).participant(p).alpha;
+        rho=absolute.dataset(n).participant(p).rho;
+        beta=absolute.dataset(n).participant(p).beta;
+        lambda=absolute.dataset(n).participant(p).lambda;
+
+        for at=adapting_temperatures
+            x_c=x-baseline_temperature-alpha;
+            stim_rep=x_c./(1+exp(-100*x_c));
+            adapt_stim_rep=stim_rep./(1+exp(-rho*(stim_rep-(at-baseline_temperature-alpha))));
+            theta=lambda+(1-2*lambda)*normcdf(beta*adapt_stim_rep);
+            plot(x,theta)
+        end
+    end
+    hold off
+    
+    figure
+    hold on
+    for p=1:n_participant
+        intercept=absolute.dataset(n).participant(p).intercept;
+        slope=absolute.dataset(n).participant(p).slope;
+      
+        for at=adapting_temperatures
+            x_c=x-baseline_temperature;
+            theta=1./(1+exp(-(intercept+slope*x_c)));
+            plot(x,theta)
+        end
+    end
+    hold off
 end
-%% Generate group and participant parameters for the full adaptation model
+%% Generate group and participant parameters for the relative model
 close all
 for n=1:n_datasets
     relative.dataset(n).mu_log_alpha=normrnd(-2,1);
@@ -100,82 +127,37 @@ for n=1:n_datasets
         relative.dataset(n).participant(p).eta=exp(normrnd(relative.dataset(n).mu_log_eta,relative.dataset(n).tau_log_eta));
     end
     
-%     x=0:.1:10;
-%     figure()
-%     hold on
-%     for p=1:n_participant
-%         x_c=x-relative.dataset(n).participant(p).alpha;
-%         weight = inv_logit(x_c.*100);
-%         theta = (1-weight) * 0.5 + (weight-0) .* normcdf(relative.dataset(n).participant(p).beta .* x_c);
-%         plot(x,theta)
-%     end
-%     hold off
-%     xlim([0 10])
-%     ylim([.5 1])
-end
-%% Generate group and participant parameters for the partial adaptation model
-close all
-for n=1:n_datasets
-    sat=1000;
-    while any((mean(sat)>45)+(sum(sat>50)))
-        mixed.dataset(n).mu_log_alpha=normrnd(-2,1);
-        mixed.dataset(n).mu_log_sigma=normrnd(1,1);
-        mixed.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
-        
-        mixed.dataset(n).mu_intercept=normrnd(-2,1);
-        mixed.dataset(n).mu_log_slope=normrnd(-2,1);
-        mixed.dataset(n).mu_log_lb=normrnd(2,.5);
-        mixed.dataset(n).mu_log_ub=normrnd(2,.5);
-        mixed.dataset(n).mu_log_eta=normrnd(3,1);
+    x=30:.1:40;
+    figure
+    hold on
+    for p=1:n_participant
+    alpha=relative.dataset(n).participant(p).alpha;
+    beta=relative.dataset(n).participant(p).beta;
+    lambda=relative.dataset(n).participant(p).lambda;
 
-        mixed.dataset(n).tau_log_alpha=abs(normrnd(0,1));
-        mixed.dataset(n).tau_log_sigma=abs(normrnd(0,1));
-        mixed.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
-        
-        mixed.dataset(n).tau_intercept=abs(normrnd(-2,1));
-        mixed.dataset(n).tau_log_slope=abs(normrnd(-2,1));
-        mixed.dataset(n).tau_log_lb=abs(normrnd(2,.5));
-        mixed.dataset(n).tau_log_ub=abs(normrnd(2,.5));
-        mixed.dataset(n).tau_log_eta=abs(normrnd(3,1));
-
-        for p=1:n_participant
-            alpha=exp(normrnd(mixed.dataset(n).mu_log_alpha,mixed.dataset(n).tau_log_alpha));
-            sigma=exp(normrnd(mixed.dataset(n).mu_log_sigma,mixed.dataset(n).tau_log_sigma));
-            mixed.dataset(n).participant(p).alpha=alpha;
-            mixed.dataset(n).participant(p).sigma=sigma;
-            mixed.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(mixed.dataset(n).mu_hlogit_lambda,mixed.dataset(n).tau_hlogit_lambda)));
-        
-            mixed.dataset(n).participant(p).intercept=normrnd(mixed.dataset(n).mu_intercept,mixed.dataset(n).tau_intercept);
-            mixed.dataset(n).participant(p).slope=exp(normrnd(mixed.dataset(n).mu_log_slope,mixed.dataset(n).tau_log_slope));
-            mixed.dataset(n).participant(p).lb=exp(normrnd(mixed.dataset(n).mu_log_lb,mixed.dataset(n).tau_log_lb));
-            mixed.dataset(n).participant(p).ub=exp(normrnd(mixed.dataset(n).mu_log_ub,mixed.dataset(n).tau_log_ub));
-            mixed.dataset(n).participant(p).eta=exp(normrnd(mixed.dataset(n).mu_log_eta,mixed.dataset(n).tau_log_eta));
-        end
-        for p=1:n_participant
-            sat(p)=34+mixed.dataset(n).participant(p).sigma+mixed.dataset(n).participant(p).alpha;
+        for at=adapting_temperatures
+            x_c=x-at-alpha;
+            stim_rep=x_c./(1+exp(-100*x_c));
+            theta=lambda+(1-2*lambda)*normcdf(beta*stim_rep);
+            plot(x,theta)
         end
     end
-%     x=30:.2:50;
-%     figure()
-%     hold on
-%     for p=1:n_participant
-%         for at=adapting_temperatures
-%             x_r=x-at;
-%             x_c=x_r-mixed.dataset(n).participant(p).alpha;
-%             beta=3/(2+mixed.dataset(n).participant(p).sigma+mixed.dataset(n).participant(p).alpha-(at-32));
-%             weight = inv_logit(x_c.*100);
-%             theta = (1-weight) * 0.5 + (weight-0) .* normcdf(beta .* x_c);
-%             plot(x,theta)
-%         end
-%     end
-%     hold off
-%     ylim([.5 1])
-%     s(n,1:n_participant)=sat;
+    hold off
+    x=30:.1:40;
+    figure
+    hold on
+    for p=1:n_participant
+    intercept=relative.dataset(n).participant(p).intercept;
+    slope=relative.dataset(n).participant(p).slope;
+        for at=adapting_temperatures
+            x_c=x-at;
+            theta=1./(1+exp(-(intercept+slope*x_c)));
+            plot(x,theta)
+        end
+    end
+    hold off
 end
-% plot(s,'o')
-% hold on
-% plot([1 50],45*ones(1,2))
-% hold off
+
 %% Initialize  generic PM (matching warm discrimination settings)
 close all
 PM = PAL_AMPM_setupPM( ...
@@ -201,6 +183,7 @@ for n=1:n_datasets
     for p=1:n_participant
         fprintf('Participant %i out of %i \n',p,n_participant)
         alpha=absolute.dataset(n).participant(p).alpha;
+        rho=absolute.dataset(n).participant(p).rho;
         beta=absolute.dataset(n).participant(p).beta;
         lambda=absolute.dataset(n).participant(p).lambda;        
         
@@ -211,15 +194,15 @@ for n=1:n_datasets
         eta=absolute.dataset(n).participant(p).eta;
 
         for at=adapting_temperatures
-            adx=at-32+3;
+            adx=at-baseline_temperature+3;
             PMl=PM;
             
             for t=1:n_trial
                 relative_target = PMl.xCurrent;
                 absolute_target = relative_target + at;
-                centered_stimulus = absolute_target - 34 - alpha;
-                weight = inv_logit(centered_stimulus.*100);
-                theta = (1-weight) * 0.5 + (weight-lambda) .* normcdf(beta .* centered_stimulus);
+                stimulus_representation = (absolute_target-baseline_temperature-alpha)/(1+exp(-100*(absolute_target-baseline_temperature-alpha)));
+                adapted_stimulus_representation = stimulus_representation/(1+exp(-rho*(stimulus_representation-(at-baseline_temperature-alpha))));
+                theta = lambda+(1-2*lambda)*normcdf(beta*adapted_stimulus_representation);
                 
                 choice_accuracy=binornd(1,theta);
                 PMl=PAL_AMPM_updatePM(PMl,choice_accuracy);
@@ -239,7 +222,8 @@ for n=1:n_datasets
                 else
                     tt=target_temperatures(2);
                 end
-                lr=intercept+slope*(tt-42);
+               
+                lr=intercept+slope*(tt-baseline_temperature);
 
                 r0=binornd(1,1-inv_logit(lr+lb));
                 r1=binornd(1,inv_logit(lr-ub));
@@ -412,16 +396,14 @@ for n=1:n_datasets
         eta=relative.dataset(n).participant(p).eta;
         
         for at=adapting_temperatures
-            adx=at-32+3;
+            adx=at-baseline_temperature+3;
             PMl=PM;
             
             for t=1:n_trial
                 relative_target = PMl.xCurrent;
                 absolute_target = relative_target + at;
-                
-                centered_stimulus = relative_target - alpha;
-                weight = inv_logit(centered_stimulus.*100);
-                theta = (1-weight) * 0.5 + (weight-lambda) .* normcdf(beta .* centered_stimulus);
+                stimulus_representation = (relative_target-alpha)/(1+exp(-100*(relative_target-alpha)));
+                theta = lambda+(1-2*lambda)*normcdf(beta*stimulus_representation);
                 
                 choice_accuracy=binornd(1,theta);
                 PMl=PAL_AMPM_updatePM(PMl,choice_accuracy);
@@ -441,7 +423,8 @@ for n=1:n_datasets
                 else
                     tt=target_temperatures(2);
                 end
-                lr=intercept+slope*(tt-at-8);
+
+                lr=intercept+slope*(tt-at);
 
                 r0=binornd(1,1-inv_logit(lr+lb));
                 r1=binornd(1,inv_logit(lr-ub));
@@ -598,211 +581,6 @@ relative_table = cell2table(rows, ...
     });
 outputPath = fullfile(fileparts(cd), 'simulated_data', 'relative_model_rating_data.csv');
 writetable(relative_table, outputPath);
-
-%% Simulate trial data for the mixed model
-for n=1:n_datasets
-    fprintf('Simulating mixed coding dataset %i out of %i \n',n,n_datasets)
-    for p=1:n_participant
-        fprintf('Participant %i out of %i \n',p,n_participant)
-        alpha=mixed.dataset(n).participant(p).alpha;
-        sigma=mixed.dataset(n).participant(p).sigma;
-        lambda=mixed.dataset(n).participant(p).lambda;        
-
-        intercept=mixed.dataset(n).participant(p).intercept;
-        slope=mixed.dataset(n).participant(p).slope;
-        lb=mixed.dataset(n).participant(p).lb;
-        ub=mixed.dataset(n).participant(p).ub;
-        eta=mixed.dataset(n).participant(p).eta;
-        
-        for at=adapting_temperatures
-            adx=at-32+3;
-            PMl=PM;
-            beta = 3/(34+sigma+alpha-at);
-            
-            for t=1:n_trial
-                relative_target = PMl.xCurrent;
-                absolute_target = relative_target + at;
-           
-                centered_stimulus = relative_target - alpha;
-                weight = inv_logit(centered_stimulus.*100);
-                theta = (1-weight) * 0.5 + (weight-lambda) .* normcdf(beta .* centered_stimulus);
-                
-                choice_accuracy=binornd(1,theta);
-                PMl=PAL_AMPM_updatePM(PMl,choice_accuracy);
-                
-                mixed.dataset(n).participant(p).condition(adx).baseline_temperature=baseline_temperature;
-                mixed.dataset(n).participant(p).condition(adx).absolute_adapting_temperature=at;
-                
-                mixed.dataset(n).participant(p).condition(adx).trial(t)=t;
-                mixed.dataset(n).participant(p).condition(adx).absolute_target_temperature(t)=absolute_target;
-                mixed.dataset(n).participant(p).condition(adx).choice_accuracy(t)=choice_accuracy;
-            end
-            
-            [target_temperatures] = determine_target_detection_at(PMl,at);
-            for t=1:n_rating_trial
-                if mod(t,2)
-                    tt=target_temperatures(1);
-                else
-                    tt=target_temperatures(2);
-                end
-                lr=intercept+slope*(tt-at-8)*beta;
-
-                r0=binornd(1,1-inv_logit(lr+lb));
-                r1=binornd(1,inv_logit(lr-ub));
-                mr=inv_logit(lr);
-                r=betarnd(mr*eta,(1-mr)*eta);
-                
-                if r0
-                    rating=0;
-                elseif r1
-                    rating=1;
-                else
-                    rating=r;
-                end
-
-                mixed.dataset(n).participant(p).condition(adx).rating_trial(t)=t;
-                mixed.dataset(n).participant(p).condition(adx).rating_absolute_target_temperature(t)=tt;
-                mixed.dataset(n).participant(p).condition(adx).rating(t)=rating;
-            end
-        end
-    end
-end
-
-%% Reformat and save the mixed coding simulations as csv
-rows={};
-row_idx=1;
-for n=1:n_datasets
-    
-    mla=mixed.dataset(n).mu_log_alpha;
-    mls=mixed.dataset(n).mu_log_sigma;
-    mll=mixed.dataset(n).mu_hlogit_lambda;
-    
-    tla=mixed.dataset(n).tau_log_alpha;
-    tls=mixed.dataset(n).tau_log_sigma;
-    tll=mixed.dataset(n).tau_hlogit_lambda; 
-        
-    for p=1:n_participant
-        alpha=mixed.dataset(n).participant(p).alpha;
-        sigma=mixed.dataset(n).participant(p).sigma;
-        lambda=mixed.dataset(n).participant(p).lambda;        
-
-        for adx=1:length(adapting_temperatures)
-            at=adapting_temperatures(adx);
-            
-            for t=1:n_trial
-                tt=mixed.dataset(n).participant(p).condition(adx).absolute_target_temperature(t);
-                ca=mixed.dataset(n).participant(p).condition(adx).choice_accuracy(t);
-                    
-                rows(row_idx,:)={...
-                    n,'m',...
-                    mla,mls,mll,...
-                    tla,tls,tll,...
-                    p,...
-                    alpha,sigma,lambda,...
-                    baseline_temperature,at,...
-                    t,tt,ca...
-                    };
-                row_idx=row_idx+1;
-            end
-        end
-    end
-end
-mixed_table = cell2table(rows, ...
-    'VariableNames', { ...
-        'dataset', ...
-        'model', ...
-        'mu_log_alpha',...
-        'mu_log_sigma',...
-        'mu_hlogit_lambda',...
-        'tau_log_alpha',...
-        'tau_log_sigma',...
-        'tau_hlogit_lambda',...
-        'participant', ...
-        'alpha', ...
-        'sigma', ...
-        'lambda', ...
-        'recorded_baseline_temperature', ...
-        'absolute_adapting_temperature', ...
-        'trial', ...
-        'absolute_target_temperature', ...
-        'choice_accuracy' ...
-    });
-outputPath = fullfile(fileparts(cd), 'simulated_data', 'mixed_model_discrimination_data.csv');
-writetable(mixed_table, outputPath);
-
-%% Reformat and save the mixed coding rating simulations as csv
-rows={};
-row_idx=1;
-for n=1:n_datasets
-    
-    mi=mixed.dataset(n).mu_intercept;
-    mls=mixed.dataset(n).mu_log_slope;
-    mllb=mixed.dataset(n).mu_log_lb;
-    mlub=mixed.dataset(n).mu_log_ub;
-    mle=mixed.dataset(n).mu_log_eta;
-
-    ti=mixed.dataset(n).tau_intercept;
-    tls=mixed.dataset(n).tau_log_slope;
-    tllb=mixed.dataset(n).tau_log_lb;
-    tlub=mixed.dataset(n).tau_log_ub;
-    tle=mixed.dataset(n).tau_log_eta; 
-        
-    for p=1:n_participant
-        intercept=mixed.dataset(n).participant(p).intercept;
-        slope=mixed.dataset(n).participant(p).slope;
-        lb=mixed.dataset(n).participant(p).lb;        
-        ub=mixed.dataset(n).participant(p).ub;        
-        eta=mixed.dataset(n).participant(p).eta;        
-
-        for adx=1:length(adapting_temperatures)
-            at=adapting_temperatures(adx);
-            
-            for t=1:n_rating_trial
-                tt=mixed.dataset(n).participant(p).condition(adx).rating_absolute_target_temperature(t);
-                r=mixed.dataset(n).participant(p).condition(adx).rating(t);
-                    
-                rows(row_idx,:)={...
-                    n,'m',...
-                    mi,mls,mllb,mlub,mle,...
-                    ti,tls,tllb,tlub,tle,...
-                    p,...
-                    intercept,slope,lb,ub,eta,...
-                    baseline_temperature,at,...
-                    t,tt,r...
-                    };
-                row_idx=row_idx+1;
-            end
-        end
-    end
-end
-mixed_table = cell2table(rows, ...
-    'VariableNames', { ...
-        'dataset', ...
-        'model', ...
-        'mu_intercept',...
-        'mu_log_slope',...
-        'mu_log_lb',...
-        'mu_log_ub',...
-        'mu_log_eta',...
-        'tau_intercept',...
-        'tau_log_slope',...
-        'tau_log_lb',...
-        'tau_log_ub',...
-        'tau_log_eta',...
-        'participant', ...
-        'intercept', ...
-        'slope', ...
-        'lb', ...
-        'ub', ...
-        'eta', ...
-        'recorded_baseline_temperature', ...
-        'absolute_adapting_temperature', ...
-        'trial', ...
-        'absolute_target_temperature', ...
-        'rating' ...
-    });
-outputPath = fullfile(fileparts(cd), 'simulated_data', 'mixed_model_rating_data.csv');
-writetable(mixed_table, outputPath);
 
 
 %%

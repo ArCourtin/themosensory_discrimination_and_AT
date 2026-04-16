@@ -106,7 +106,6 @@ models<-
   c(
     'discrimination_absolute_coding.stan',
     'discrimination_relative_coding.stan',
-    'discrimination_mixed_coding.stan',
     'discrimination_non_mechanistic.stan'
   )
 
@@ -143,18 +142,10 @@ model_data <-
     ) %>%
   full_join(model_data)
 
-model_data <-
-  read_csv("recovery_analysis/simulated_data/mixed_model_discrimination_data.csv") %>%
-  mutate(
-    relative_adapting_temperature =
-      absolute_adapting_temperature - recorded_baseline_temperature,
-    adapting_temperature_idx = 3 + relative_adapting_temperature,
-    dataset=dataset+100
-    ) %>%
-  full_join(model_data)
+
 
 #### Prepare lists for fitting runs ##############
-mod_comb<-expand_grid(dataset=1:150,fitted=1:4)
+mod_comb<-expand_grid(dataset=1:100,fitted=1:3)
 iter_info<-list()
 for(m in 1:dim(mod_comb)[1]){
   iter_info[[m]]<-
