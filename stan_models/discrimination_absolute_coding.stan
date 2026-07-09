@@ -41,14 +41,14 @@ transformed parameters{
   {
     matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
 
-    alpha = mu[1] + delta_participant[,1];
-    rho = exp(mu[2] + delta_participant[,2]);
+    rho = mu[1] + delta_participant[,1];
+    alpha = exp(mu[2] + delta_participant[,2]);
     beta = exp(mu[3] + delta_participant[,3]);
     lambda = .5 * inv_logit(mu[4] + delta_participant[,4]);  
     
-    vector[N] centered_stimulus = centered_absolute_target_temperature - alpha[participant];
+    vector[N] centered_stimulus = centered_absolute_target_temperature - rho[participant];
     vector[N] stimulus_representation = centered_stimulus .* inv_logit(100*centered_stimulus);
-    vector[N] adapted_stimulus_representation = stimulus_representation .* inv_logit(rho[participant].*(stimulus_representation-(centered_absolute_adapting_temperature-alpha[participant])));
+    vector[N] adapted_stimulus_representation = stimulus_representation .* inv_logit(100.*(stimulus_representation-(centered_absolute_adapting_temperature+alpha[participant]-rho[participant])));
 
     theta =  lambda[participant] + (1-2*lambda[participant]) .* Phi(beta[participant] .* adapted_stimulus_representation);  
   }
@@ -56,16 +56,16 @@ transformed parameters{
 model{
   //Priors
   mu[1] ~ normal(0,2);
-  mu[2] ~ normal(2,2);
+  mu[2] ~ normal(-2,1);
   mu[3] ~ normal(0,1);
   mu[4] ~ normal(-4,1);
   
   tau[1] ~ normal(0,2);
-  tau[2] ~ normal(0,2);
+  tau[2] ~ normal(0,1);
   tau[3] ~ normal(0,1);
   tau[4] ~ normal(0,1);
   
-  L ~ lkj_corr_cholesky(1);
+  L ~ lkj_corr_cholesky(2);
 
   to_vector(z) ~ std_normal();
   

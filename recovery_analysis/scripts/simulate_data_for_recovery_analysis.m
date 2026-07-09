@@ -17,14 +17,14 @@ adapting_temperatures = baseline_temperature + (-2:2);
 %% Generate group and participant parameters for the absolute model
 close all
 for n=1:n_datasets
-    alpha(1:n_participant)=-10;
-    while any(alpha<-2)
-        m_a=-10;
-        while m_a<-2
-            m_a=normrnd(0,2);
+    rho(1:n_participant)=-10;
+    while any(rho<-2)
+        m_r=-10;
+        while m_r<-2
+            m_r=normrnd(0,2);
         end
-        absolute.dataset(n).mu_alpha=m_a;
-        absolute.dataset(n).mu_log_rho=normrnd(2,2);
+        absolute.dataset(n).mu_rho=m_r;
+        absolute.dataset(n).mu_log_alpha=normrnd(-2,1);
         absolute.dataset(n).mu_log_beta=normrnd(0,1);
         absolute.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
 
@@ -34,8 +34,8 @@ for n=1:n_datasets
         absolute.dataset(n).mu_log_ub=normrnd(2,.5);
         absolute.dataset(n).mu_log_eta=normrnd(3,1);
 
-        absolute.dataset(n).tau_alpha=abs(normrnd(0,2));
-        absolute.dataset(n).tau_log_rho=abs(normrnd(0,2));
+        absolute.dataset(n).tau_rho=abs(normrnd(0,2));
+        absolute.dataset(n).tau_log_alpha=abs(normrnd(0,1));
         absolute.dataset(n).tau_log_beta=abs(normrnd(0,1));
         absolute.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
 
@@ -46,9 +46,9 @@ for n=1:n_datasets
         absolute.dataset(n).tau_log_eta=abs(normrnd(3,1));
 
         for p=1:n_participant
-            alpha(p)=normrnd(absolute.dataset(n).mu_alpha,absolute.dataset(n).tau_alpha);
-            absolute.dataset(n).participant(p).alpha=alpha(p);
-            absolute.dataset(n).participant(p).rho=exp(normrnd(absolute.dataset(n).mu_log_rho,absolute.dataset(n).tau_log_rho));
+            rho(p)=normrnd(absolute.dataset(n).mu_rho,absolute.dataset(n).tau_rho);
+            absolute.dataset(n).participant(p).rho=rho(p);
+            absolute.dataset(n).participant(p).alpha=exp(normrnd(absolute.dataset(n).mu_log_alpha,absolute.dataset(n).tau_log_alpha));
             absolute.dataset(n).participant(p).beta=exp(normrnd(absolute.dataset(n).mu_log_beta,absolute.dataset(n).tau_log_beta));
             absolute.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(absolute.dataset(n).mu_hlogit_lambda,absolute.dataset(n).tau_hlogit_lambda)));
 
@@ -69,9 +69,9 @@ for n=1:n_datasets
         lambda=absolute.dataset(n).participant(p).lambda;
 
         for at=adapting_temperatures
-            x_c=x-baseline_temperature-alpha;
+            x_c=x-baseline_temperature-rho;
             stim_rep=x_c./(1+exp(-100*x_c));
-            adapt_stim_rep=stim_rep./(1+exp(-rho*(stim_rep-(at-baseline_temperature-alpha))));
+            adapt_stim_rep=stim_rep./(1+exp(-100*(stim_rep-(at-baseline_temperature+alpha-rho))));
             theta=lambda+(1-2*lambda)*normcdf(beta*adapt_stim_rep);
             plot(x,theta)
         end
@@ -200,8 +200,8 @@ for n=1:n_datasets
             for t=1:n_trial
                 relative_target = PMl.xCurrent;
                 absolute_target = relative_target + at;
-                stimulus_representation = (absolute_target-baseline_temperature-alpha)/(1+exp(-100*(absolute_target-baseline_temperature-alpha)));
-                adapted_stimulus_representation = stimulus_representation/(1+exp(-rho*(stimulus_representation-(at-baseline_temperature-alpha))));
+                stimulus_representation = (absolute_target-baseline_temperature-rho)/(1+exp(-100*(absolute_target-baseline_temperature-rho)));
+                adapted_stimulus_representation = stimulus_representation/(1+exp(-100*(stimulus_representation-(at-baseline_temperature+alpha-rho))));
                 theta = lambda+(1-2*lambda)*normcdf(beta*adapted_stimulus_representation);
                 
                 choice_accuracy=binornd(1,theta);
@@ -250,17 +250,20 @@ rows={};
 row_idx=1;
 for n=1:n_datasets
     
-    ma=absolute.dataset(n).mu_alpha;
+    mr=absolute.dataset(n).mu_rho;
     mlb=absolute.dataset(n).mu_log_beta;
+    mla=absolute.dataset(n).mu_log_alpha;
     mll=absolute.dataset(n).mu_hlogit_lambda;
     
-    ta=absolute.dataset(n).tau_alpha;
+    tr=absolute.dataset(n).tau_rho;
     tlb=absolute.dataset(n).tau_log_beta;
+    tla=absolute.dataset(n).tau_log_alpha;
     tll=absolute.dataset(n).tau_hlogit_lambda; 
         
     for p=1:n_participant
         alpha=absolute.dataset(n).participant(p).alpha;
         beta=absolute.dataset(n).participant(p).beta;
+        rho=absolute.dataset(n).participant(p).rho;
         lambda=absolute.dataset(n).participant(p).lambda;        
 
         for adx=1:length(adapting_temperatures)
@@ -272,10 +275,10 @@ for n=1:n_datasets
                     
                 rows(row_idx,:)={...
                     n,'a',...
-                    ma,mlb,mll,...
-                    ta,tlb,tll,...
+                    mr,mla,mlb,mll,...
+                    tr,tla,tlb,tll,...
                     p,...
-                    alpha,beta,lambda,...
+                    alpha,rho,beta,lambda,...
                     baseline_temperature,at,...
                     t,tt,ca...
                     };
@@ -288,14 +291,17 @@ absolute_table = cell2table(rows, ...
     'VariableNames', { ...
         'dataset', ...
         'model', ...
-        'mu_alpha',...
+        'mu_rho',...
+        'mu_log_alpha',...
         'mu_log_beta',...
         'mu_hlogit_lambda',...
-        'tau_alpha',...
+        'tau_rho',...
+        'tau_log_alpha',...
         'tau_log_beta',...
         'tau_hlogit_lambda',...
         'participant', ...
         'alpha', ...
+        'rho', ...
         'beta', ...
         'lambda', ...
         'recorded_baseline_temperature', ...

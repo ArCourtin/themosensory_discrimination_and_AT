@@ -57,7 +57,7 @@ model{
   tau[2] ~ normal(0,1);
   tau[3] ~ normal(0,1);
   
-  L ~ lkj_corr_cholesky(1);
+  L ~ lkj_corr_cholesky(2);
 
   to_vector(z) ~ std_normal();
   

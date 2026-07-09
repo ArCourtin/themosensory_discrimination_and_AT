@@ -40,7 +40,7 @@ transformed parameters{
   vector[N] latent_representation;
   
   {
-    matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
+    matrix[M,P] delta_participant = diag_pre_multiply(tau, L) * z;
 
     intercept[1] = mu[1] + delta_participant[1] + mu[2] + delta_participant[2];
     intercept[2] = mu[1] + delta_participant[1] + mu[3] + delta_participant[3];
@@ -59,7 +59,7 @@ transformed parameters{
     eta = exp(mu[13] + delta_participant[13]);
     
     for(n in 1:N){
-      latent_representation[n] = intercept[participant[n],adapting_temperature_idx[n]] + slope[participant[n],adapting_temperature_idx[n]] .* deviation_from_adapting_temperature[n];
+      latent_representation[n] = intercept[adapting_temperature_idx[n],participant[n]] + slope[adapting_temperature_idx[n],participant[n]] .* deviation_from_adapting_temperature[n];
     }
   }
   vector[N] mu_rating = inv_logit(latent_representation);

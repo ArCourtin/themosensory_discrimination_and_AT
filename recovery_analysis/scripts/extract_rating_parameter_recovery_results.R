@@ -24,16 +24,6 @@ model_data <-
     adapting_temperature_idx = 3 + relative_adapting_temperature,
     dataset=dataset+50
   ) %>%
-  full_join(model_data)
-
-model_data <-
-  read_csv("recovery_analysis/simulated_data/mixed_model_rating_data.csv") %>%
-  mutate(
-    relative_adapting_temperature =
-      absolute_adapting_temperature - recorded_baseline_temperature,
-    adapting_temperature_idx = 3 + relative_adapting_temperature,
-    dataset=dataset+100
-  ) %>%
   full_join(model_data) %>% 
   filter(trial==1,participant==1,adapting_temperature_idx==1) %>% 
   pivot_longer(
@@ -63,23 +53,13 @@ for(dataset in 51:100){
     ) %>%     
     bind_rows(result_summary)
 }
-for(dataset in 101:150){
-  result_summary <- readRDS(paste0("recovery_analysis/results/fits/summary_rating_3_3_",dataset,".rds")) %>% 
-    filter(variable%in%c(paste0('mu[',4:8,']'),paste0('tau[',4:8,']'))) %>% 
-    mutate(
-      dataset=dataset,
-      model='m',
-      variable=c('mu_intercept','mu_log_slope','mu_log_lb','mu_log_ub','mu_log_eta','tau_intercept','tau_log_slope','tau_log_lb','tau_log_ub','tau_log_eta')
-    ) %>%     
-    bind_rows(result_summary)
-}
 
 pooled<-
   result_summary %>% 
   full_join(model_data) %>% 
   filter(!is.na(truth)) %>% 
   mutate(
-    model=factor(model,c('a','r','m'),c('absolute','relative','mixed')),
+    model=factor(model,c('a','r'),c('absolute','relative')),
     variable=factor(variable,c('mu_intercept','mu_log_slope','mu_log_lb','mu_log_ub','mu_log_eta','tau_intercept','tau_log_slope','tau_log_lb','tau_log_ub','tau_log_eta'))
     )
 
@@ -95,7 +75,7 @@ pooled %>%
     size=.1
     )+
   geom_abline()+
-  facet_wrap(model~variable,scales = 'free',nrow = 3)+
+  facet_wrap(model~variable,scales = 'free',ncol = 5)+
   theme_classic()+
   labs(x='True value', y='Estimated value')
 
