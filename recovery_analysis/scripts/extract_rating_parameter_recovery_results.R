@@ -1,11 +1,15 @@
 # Script used to assess the parameter recovery results for the rating models
 # Author: Arthur S. Courtin  
-# License: MIT (see LICENSE file) 
+# License: MIT (see LICENSE file)
+# Edited with the assistance of Claude Code (Anthropic). 
 
 #### Set-up environment ####
 library(tidyverse)
 
 rm(list=ls())
+
+# Number of simulated datasets per generative model (must match the MATLAB simulation).
+n_datasets <- 30
 
 #### Extract and aggregate data ####
 model_data <-
@@ -22,7 +26,7 @@ model_data <-
     relative_adapting_temperature =
       absolute_adapting_temperature - recorded_baseline_temperature,
     adapting_temperature_idx = 3 + relative_adapting_temperature,
-    dataset=dataset+50
+    dataset=dataset+n_datasets
   ) %>%
   full_join(model_data) %>% 
   filter(trial==1,participant==1,adapting_temperature_idx==1) %>% 
@@ -35,8 +39,8 @@ model_data <-
 
 #### Loop through datasets - absolute coding ####
 result_summary<-NULL
-for(dataset in 1:50){
-  result_summary <- readRDS(paste0("recovery_analysis/results/fits/summary_rating_1_1_",dataset,".rds")) %>% 
+for(dataset in 1:n_datasets){
+  result_summary <- readRDS(paste0("recovery_analysis/results/fits/summary_rating_1_1_",dataset,".rds")) %>%
     mutate(
       dataset=dataset,
       model='a',
@@ -44,8 +48,8 @@ for(dataset in 1:50){
       ) %>% 
     bind_rows(result_summary)
 }
-for(dataset in 51:100){
-  result_summary <- readRDS(paste0("recovery_analysis/results/fits/summary_rating_2_2_",dataset,".rds")) %>% 
+for(dataset in (n_datasets+1):(2*n_datasets)){
+  result_summary <- readRDS(paste0("recovery_analysis/results/fits/summary_rating_2_2_",dataset,".rds")) %>%
     mutate(
       dataset=dataset,
       model='r',

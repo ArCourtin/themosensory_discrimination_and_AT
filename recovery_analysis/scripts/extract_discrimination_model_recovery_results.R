@@ -1,6 +1,7 @@
 # Script used to assess the model recovery results for the discrimination models
 # Author: Arthur S. Courtin  
-# License: MIT (see LICENSE file) 
+# License: MIT (see LICENSE file)
+# Edited with the assistance of Claude Code (Anthropic). 
 
 #### Set-up environment ####
 library(tidyverse)
@@ -8,24 +9,27 @@ library(loo)
 
 rm(list=ls())
 
+# Number of simulated datasets per generative model (must match the MATLAB simulation).
+n_datasets <- 30
+
 #### Loop through iterations to extract informations - full fitted model space ####
 models<-c('absolute','relative','non-mechanistic')
 mod_comp_res<-NULL
 for(generative in 1:2){
-  for(dataset in 1:50){
+  for(dataset in 1:n_datasets){
     div_a<-
-      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_1_",dataset+(generative-1)*50,".rds"))[[1]] %>% 
+      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_1_",dataset+(generative-1)*n_datasets,".rds"))[[1]] %>% 
       sum()
     div_r<-
-      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_2_",dataset+(generative-1)*50,".rds"))[[1]] %>% 
+      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_2_",dataset+(generative-1)*n_datasets,".rds"))[[1]] %>% 
       sum()
     div_n<-
-      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_3_",dataset+(generative-1)*50,".rds"))[[1]] %>% 
+      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_3_",dataset+(generative-1)*n_datasets,".rds"))[[1]] %>% 
       sum()
     
-    loo_a<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_1_",dataset+(generative-1)*50,".rds"))
-    loo_r<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_2_",dataset+(generative-1)*50,".rds"))
-    loo_n<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_3_",dataset+(generative-1)*50,".rds"))
+    loo_a<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_1_",dataset+(generative-1)*n_datasets,".rds"))
+    loo_r<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_2_",dataset+(generative-1)*n_datasets,".rds"))
+    loo_n<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_3_",dataset+(generative-1)*n_datasets,".rds"))
 
     k_a<-sum(loo_a$diagnostics[[1]]>.7)
     k_r<-sum(loo_r$diagnostics[[1]]>.7)
@@ -50,15 +54,15 @@ for(generative in 1:2){
         ) %>% 
       arrange(fitted)
     comp_sig<-
-      comp %>% 
-      mutate(sig=p<0.05) %>% 
-      summarise(sig=3==sum(sig,na.rm = T))
+      comp %>%
+      mutate(sig=p<0.05) %>%
+      summarise(sig=2==sum(sig,na.rm = T))
     
     comp$won_sig<-comp_sig$sig
     comp$div<-c(div_a,div_n,div_r)
     comp$k<-c(k_a,k_n,k_r)
     comp$generative<-models[generative]
-    comp$dataset<-dataset+(generative-1)*50
+    comp$dataset<-dataset+(generative-1)*n_datasets
     
     mod_comp_res<-bind_rows(mod_comp_res,comp)
   }
@@ -73,9 +77,9 @@ results<-
   group_by(generative,fitted) %>% 
   summarise(n=sum(won)) %>% 
   mutate(
-    ratio=n/50,
-    lb=qbeta(.025,1+n,1+50-n),
-    ub=qbeta(.975,1+n,1+50-n)
+    ratio=n/n_datasets,
+    lb=qbeta(.025,1+n,1+n_datasets-n),
+    ub=qbeta(.975,1+n,1+n_datasets-n)
   )
 
 results %>% 
@@ -100,16 +104,16 @@ ggsave('recovery_analysis/figures/MR_D_F.png',units = 'cm',width = 14,height = 1
 models<-c('absolute','relative','non-mechanistic')
 mod_comp_res<-NULL
 for(generative in 1:2){
-  for(dataset in 1:50){
+  for(dataset in 1:n_datasets){
     div_a<-
-      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_1_",dataset+(generative-1)*50,".rds"))[[1]] %>% 
+      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_1_",dataset+(generative-1)*n_datasets,".rds"))[[1]] %>% 
       sum()
     div_r<-
-      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_2_",dataset+(generative-1)*50,".rds"))[[1]] %>% 
+      readRDS(paste0("recovery_analysis/results/fits/diagnostics_",generative,"_2_",dataset+(generative-1)*n_datasets,".rds"))[[1]] %>% 
       sum()
     
-    loo_a<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_1_",dataset+(generative-1)*50,".rds"))
-    loo_r<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_2_",dataset+(generative-1)*50,".rds"))
+    loo_a<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_1_",dataset+(generative-1)*n_datasets,".rds"))
+    loo_r<-readRDS(paste0("recovery_analysis/results/loo/",generative,"_2_",dataset+(generative-1)*n_datasets,".rds"))
 
     k_a<-sum(loo_a$diagnostics[[1]]>.7)
     k_r<-sum(loo_r$diagnostics[[1]]>.7)
@@ -132,15 +136,15 @@ for(generative in 1:2){
       ) %>% 
       arrange(fitted)
     comp_sig<-
-      comp %>% 
-      mutate(sig=p<0.05) %>% 
-      summarise(sig=2==sum(sig,na.rm = T))
+      comp %>%
+      mutate(sig=p<0.05) %>%
+      summarise(sig=1==sum(sig,na.rm = T))
     
     comp$won_sig<-comp_sig$sig
     comp$div<-c(div_a,div_r)
     comp$k<-c(k_a,k_r)
     comp$generative<-models[generative]
-    comp$dataset<-dataset+(generative-1)*50
+    comp$dataset<-dataset+(generative-1)*n_datasets
     
     mod_comp_res<-bind_rows(mod_comp_res,comp)
   }
@@ -149,15 +153,15 @@ for(generative in 1:2){
 results<-
   mod_comp_res %>% 
   mutate(
-    generative=factor(generative,c('absolute','relative','mixed')),
+    generative=factor(generative,c('absolute','relative')),
     fitted=factor(fitted,c('absolute','relative'))
   ) %>% 
   group_by(generative,fitted) %>% 
   summarise(n=sum(won)) %>% 
   mutate(
-    ratio=n/50,
-    lb=qbeta(.025,1+n,1+50-n),
-    ub=qbeta(.975,1+n,1+50-n)
+    ratio=n/n_datasets,
+    lb=qbeta(.025,1+n,1+n_datasets-n),
+    ub=qbeta(.975,1+n,1+n_datasets-n)
   )
 
 results %>% 

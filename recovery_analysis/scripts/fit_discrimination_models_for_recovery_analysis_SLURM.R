@@ -1,6 +1,7 @@
 # Script to used to iteratively fit the different models to the different simulated datasets
 # Author: Arthur S. Courtin  
-# License: MIT (see LICENSE file) 
+# License: MIT (see LICENSE file)
+# Edited with the assistance of Claude Code (Anthropic). 
 
 #### Set-up environment ####
 library(tidyverse)
@@ -10,6 +11,10 @@ library(rslurm)
 rm(list=ls())
 
 wd<-getwd()
+
+# Number of simulated datasets per generative model (must match the MATLAB simulation).
+# Datasets 1:n_datasets = absolute, (n_datasets+1):(2*n_datasets) = relative.
+n_datasets <- 30
 
 if (!dir.exists("recovery_analysis/sampling/c++_models")) {
   dir.create("recovery_analysis/sampling/c++_models", recursive = TRUE)
@@ -35,22 +40,39 @@ fit_model <- function(iter_info) {
     stanc_options = list("O1")
   )
   
+  seed=12345
+  # Pathfinder can occasionally fail to initialize on a given simulated dataset; fall back to
+  # cmdstanr's default random init (init=NULL) so a single failure does not lose that job.
+  pathfinder_fit<-
+    tryCatch(
+      mod$pathfinder(
+        data=iter_info$data_list,
+        psis_resample = F,
+        calculate_lp = F,
+        seed = seed,
+        refresh=500
+      ),
+      error = function(e) NULL
+    )
+
   fit <- mod$sample(
     data = iter_info$data_list,
-    seed = 12345,
+    seed = seed,
     chains = 4,
     parallel_chains = 4,
     iter_warmup = 2000,
     iter_sampling = 2000,
     max_treedepth = 12,
     adapt_delta = 0.99,
+    init=pathfinder_fit,
     refresh = 400
   )
   
   d <- fit$diagnostic_summary()
   saveRDS(d, file.path(base_dir, "recovery_analysis","results","fits",paste0("diagnostics_",iter_info$generative,"_",iter_info$fitted,"_",iter_info$dataset,".rds")))
   
-  s <- fit$summary(c("mu","tau"))
+  vars <- intersect(c("mu","tau"), fit$metadata()$stan_variables)
+  s <- fit$summary(vars)
   saveRDS(s, file.path(base_dir, "recovery_analysis","results","fits",paste0("summary_",iter_info$generative,"_",iter_info$fitted,"_",iter_info$dataset,".rds")))
   
   loo <- fit$loo(cores = 4)
@@ -74,15 +96,15 @@ compiled_models <- lapply(model_paths, function(p) {
   )
 })
 
-names(compiled_models) <- model_paths
-
 #### Extract and aggregate data ####
 model_data <-
   read_csv("recovery_analysis/simulated_data/absolute_model_discrimination_data.csv") %>%
   mutate(
     relative_adapting_temperature =
     absolute_adapting_temperature - recorded_baseline_temperature,
-    adapting_temperature_idx = 3 + relative_adapting_temperature
+    adapting_temperature_idx = 3 + relative_adapting_temperature,
+    interval_sign = if_else(active_interval == 2, 1, -1),
+    chose_second  = as.integer(if_else(active_interval == 2, choice_accuracy, 1L - choice_accuracy))
     )
 
 model_data <-
@@ -91,12 +113,14 @@ model_data <-
     relative_adapting_temperature =
     absolute_adapting_temperature - recorded_baseline_temperature,
     adapting_temperature_idx = 3 + relative_adapting_temperature,
-    dataset=dataset+50
+    interval_sign = if_else(active_interval == 2, 1, -1),
+    chose_second  = as.integer(if_else(active_interval == 2, choice_accuracy, 1L - choice_accuracy)),
+    dataset=dataset+n_datasets
     ) %>%
   bind_rows(model_data)
 
 #### Prepare lists for fitting runs ##############
-mod_comb<-expand_grid(dataset=51:100,fitted=1)
+mod_comb<-expand_grid(dataset=1:(2*n_datasets),fitted=1:3)
 iter_info<-list()
 for(m in 1:dim(mod_comb)[1]){
   sample_data <- model_data %>%
@@ -108,7 +132,8 @@ for(m in 1:dim(mod_comb)[1]){
     recorded_baseline_temperature = sample_data$recorded_baseline_temperature,
     absolute_target_temperature   = sample_data$absolute_target_temperature,
     absolute_adapting_temperature = sample_data$absolute_adapting_temperature,
-    choice_accuracy               = sample_data$choice_accuracy,
+    interval_sign                 = sample_data$interval_sign,
+    chose_second                  = sample_data$chose_second,
     participant                   = sample_data$participant,
     adapting_temperature_idx      = sample_data$adapting_temperature_idx,
     is_cold = 0
@@ -117,7 +142,7 @@ for(m in 1:dim(mod_comb)[1]){
   iter_info[[m]]<-
     list(
       wd=wd,
-      generative=ceiling(mod_comb$dataset[m]/50),
+      generative=ceiling(mod_comb$dataset[m]/n_datasets),
       fitted=mod_comb$fitted[m],
       dataset=mod_comb$dataset[m],
       model_path = model_paths[[mod_comb$fitted[m]]],
@@ -135,7 +160,7 @@ for (k in seq_along(iter_info)) {
   jobs[[k]] <- slurm_map(
     x = list(iter_info[[k]]),
     f = fit_model,
-    jobname = paste0("stan_", k),
+    jobname = paste0("stan_d_", k),
     cpus_per_node = 4,
     nodes = 1,
     slurm_options = list(time = "24:00:00", mem = "8G"),
