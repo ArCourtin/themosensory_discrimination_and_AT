@@ -1,6 +1,7 @@
 #This script is used to illustrate the priors used for the different models
 #Author: A.S. Courtin
 #Licence: MIT
+#Edited with the assistance of Claude Code (Anthropic).
 
 library(tidyverse)
 
@@ -10,10 +11,15 @@ inv_logit<-function(x){
 }
 
 M=10^3
-x=seq(30,45,.1)
 idx=1:M
 at=30:34
-grid<-expand.grid(x=x,idx=idx,at=at)
+x=seq(30,45,.1)
+grid_r<-expand.grid(x=x,idx=idx,at=at)
+# Response-space axis for the discrimination models: x is the SIGNED deviation from the
+# adapting temperature. |x| is the physical target deviation (target = at + |x|); the sign
+# encodes which interval held the deviating stimulus (+ = 2nd interval, so interval_sign=+1).
+d=seq(-13,13,.1)
+grid_d<-expand.grid(x=d,idx=idx,at=at)
 
 #### Discrimination - absolute coding####
 discrimination_absolute<-
@@ -31,19 +37,24 @@ discrimination_absolute<-
     alpha=exp(rnorm(1,mu_log_alpha,tau_log_alpha)),
     rho=rnorm(1,mu_rho,tau_rho),
     beta=exp(rnorm(1,mu_log_beta,tau_log_beta)),
-    lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2
-  ) %>% 
-  full_join(grid) %>% 
+    lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
+    mu_kappa=rnorm(1,0,1),
+    tau_kappa=abs(rnorm(1,0,1)),
+    kappa=rnorm(1,mu_kappa,tau_kappa)
+  ) %>%
+  full_join(grid_d) %>%
   mutate(
-    cx_s=x-32-rho,
+    interval_sign=sign(x),
+    target=at+abs(x),
+    cx_s=target-32-rho,
     stim_rep=cx_s*inv_logit(cx_s*100),
     adapt_stim_rep=stim_rep*inv_logit(100*(stim_rep-(at-32+alpha-rho))),
-    theta_s=lambda+(1-2*lambda)*pnorm(beta*adapt_stim_rep),
+    theta_s=lambda+(1-2*lambda)*pnorm(interval_sign*beta*adapt_stim_rep-kappa),
     
-    cx_g=x-32-mu_rho,
+    cx_g=target-32-mu_rho,
     stim_rep_g=cx_g*inv_logit(cx_g*100),
     adapt_stim_rep_g=stim_rep_g*inv_logit(100*(stim_rep_g-(at-32+exp(mu_log_alpha)-mu_rho))),
-    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(exp(mu_log_beta)*adapt_stim_rep_g)
+    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*adapt_stim_rep_g-mu_kappa)
     ) %>% 
   group_by(at,x) %>% 
   summarise(
@@ -72,7 +83,7 @@ discrimination_absolute<-
     names_pattern = "(s|g)_(lb|ub|med)_ci?_?(\\d+)?",
     values_to = "value"
   ) %>% 
-  filter(x>at)
+  filter(TRUE) # response space: keep the full signed deviation range
 
 ribbons <- discrimination_absolute %>% filter(stat %in% c("lb","ub"))%>% 
   pivot_wider(
@@ -102,13 +113,14 @@ ribbons %>%
     linetype='dotted',
     alpha=.5
   )+
+  geom_vline(aes(xintercept=0),linetype='dotted',alpha=.5)+
   scale_alpha_manual(labels=c('60% CI','80% CI','90% CI','95% CI'),values=c(.4,.3,.2,.1))+
-  scale_x_continuous(breaks=seq(30,45,3))+
-  scale_y_continuous(breaks=c(.5,.75,1))+
+  scale_x_continuous(breaks=seq(-12,12,4))+
+  scale_y_continuous(breaks=c(0,.5,1))+
   labs(
     alpha='',
-    x='Absolute target temperature',
-    y='P(correct)'
+    x='Signed target deviation (°C; + = deviating stimulus in 2nd interval)',
+    y='P(chose 2nd interval)'
   )+
   theme_minimal()+
   facet_grid(rows=vars(level),cols=vars(at))
@@ -128,18 +140,22 @@ discrimination_relative<-
     tau_logit_lambda=abs(rnorm(1)),
     alpha=exp(rnorm(1,mu_log_alpha,tau_log_alpha)),
     beta=exp(rnorm(1,mu_log_beta,tau_log_beta)),
-    lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2
-  ) %>% 
-  full_join(grid) %>% 
+    lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
+    mu_kappa=rnorm(1,0,1),
+    tau_kappa=abs(rnorm(1,0,1)),
+    kappa=rnorm(1,mu_kappa,tau_kappa)
+  ) %>%
+  full_join(grid_d) %>%
   mutate(
-    cx_s=x-at-alpha,
+    interval_sign=sign(x),
+    cx_s=abs(x)-alpha,
     stim_rep=cx_s*inv_logit(cx_s*100),
-    theta_s=lambda+(1-2*lambda)*pnorm(beta*stim_rep),
-    
-    cx_g=x-at-exp(mu_log_alpha),
+    theta_s=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa),
+
+    cx_g=abs(x)-exp(mu_log_alpha),
     stim_rep_g=cx_g*inv_logit(cx_g*100),
-    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(exp(mu_log_beta)*stim_rep_g)
-  ) %>% 
+    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g-mu_kappa)
+  ) %>%
   group_by(at,x) %>% 
   summarise(
     s_lb_ci_95=quantile(theta_s,0.025),
@@ -167,7 +183,7 @@ discrimination_relative<-
     names_pattern = "(s|g)_(lb|ub|med)_ci?_?(\\d+)?",
     values_to = "value"
   )%>% 
-  filter(x>at)
+  filter(TRUE) # response space: keep the full signed deviation range
 
 ribbons <- discrimination_relative %>% filter(stat %in% c("lb","ub"))%>% 
   pivot_wider(
@@ -197,13 +213,14 @@ ribbons %>%
     linetype='dotted',
     alpha=.5
   )+
+  geom_vline(aes(xintercept=0),linetype='dotted',alpha=.5)+
   scale_alpha_manual(labels=c('60% CI','80% CI','90% CI','95% CI'),values=c(.4,.3,.2,.1))+
-  scale_x_continuous(breaks=seq(30,45,3))+
-  scale_y_continuous(breaks=c(.5,.75,1))+
+  scale_x_continuous(breaks=seq(-12,12,4))+
+  scale_y_continuous(breaks=c(0,.5,1))+
   labs(
     alpha='',
-    x='Absolute target temperature',
-    y='P(correct)'
+    x='Signed target deviation (°C; + = deviating stimulus in 2nd interval)',
+    y='P(chose 2nd interval)'
   )+
   theme_minimal()+
   facet_grid(rows=vars(level),cols=vars(at))
@@ -215,62 +232,59 @@ discrimination_non_mechanistic<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    mu_alpha_int=rnorm(1),
-    mu_alpha_d1=rnorm(1),
-    mu_alpha_d2=rnorm(1),
-    mu_alpha_d4=rnorm(1),
-    mu_alpha_d5=rnorm(1),
-    mu_log_beta_int=rnorm(1),
-    mu_log_beta_d1=rnorm(1),
-    mu_log_beta_d2=rnorm(1),
-    mu_log_beta_d4=rnorm(1),
-    mu_log_beta_d5=rnorm(1),
+    # RW2 group profile of log-alpha across the ordered AT axis (2 anchors + curvature penalised by sigma_a)
+    a0=rnorm(1,-2,1),
+    a1=rnorm(1,0,0.5),
+    a_c1=rnorm(1),a_c2=rnorm(1),a_c3=rnorm(1),
+    sigma_a=abs(rnorm(1,0,0.3)),
+    # RW2 group profile of log-beta
+    b0=rnorm(1,0,1),
+    b1=rnorm(1,0,0.5),
+    b_c1=rnorm(1),b_c2=rnorm(1),b_c3=rnorm(1),
+    sigma_b=abs(rnorm(1,0,0.3)),
     mu_logit_lambda=rnorm(1,-4,1),
-    tau_alpha_int=abs(rnorm(1)),
-    tau_alpha_d1=abs(rnorm(1)),
-    tau_alpha_d2=abs(rnorm(1)),
-    tau_alpha_d4=abs(rnorm(1)),
-    tau_alpha_d5=abs(rnorm(1)),
-    tau_log_beta_int=abs(rnorm(1)),
-    tau_log_beta_d1=abs(rnorm(1)),
-    tau_log_beta_d2=abs(rnorm(1)),
-    tau_log_beta_d4=abs(rnorm(1)),
-    tau_log_beta_d5=abs(rnorm(1)),
+    mu_kappa=rnorm(1,0,1),
+    # per-condition participant SDs, plus lambda/kappa SDs (tau ~ half-normal(0,1))
+    tau_a1=abs(rnorm(1)),tau_a2=abs(rnorm(1)),tau_a3=abs(rnorm(1)),tau_a4=abs(rnorm(1)),tau_a5=abs(rnorm(1)),
+    tau_b1=abs(rnorm(1)),tau_b2=abs(rnorm(1)),tau_b3=abs(rnorm(1)),tau_b4=abs(rnorm(1)),tau_b5=abs(rnorm(1)),
     tau_logit_lambda=abs(rnorm(1)),
-    
-    alpha_int=rnorm(1,mu_alpha_int,tau_alpha_int),
-    alpha_d1=rnorm(1,mu_alpha_d1,tau_alpha_d1),
-    alpha_d2=rnorm(1,mu_alpha_d2,tau_alpha_d2),
-    alpha_d4=rnorm(1,mu_alpha_d4,tau_alpha_d4),
-    alpha_d5=rnorm(1,mu_alpha_d5,tau_alpha_d5),
-    log_beta_int=rnorm(1,mu_log_beta_int,tau_log_beta_int),
-    log_beta_d1=rnorm(1,mu_log_beta_d1,tau_log_beta_d1),
-    log_beta_d2=rnorm(1,mu_log_beta_d2,tau_log_beta_d2),
-    log_beta_d4=rnorm(1,mu_log_beta_d4,tau_log_beta_d4),
-    log_beta_d5=rnorm(1,mu_log_beta_d5,tau_log_beta_d5),    
-    lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2
-  ) %>% 
-  full_join(grid) %>% 
+    tau_kappa=abs(rnorm(1)),
+    # group-level RW2 profiles (log scale of alpha/beta)
+    f_a1=a0, f_a2=a0+a1,
+    f_a3=2*f_a2-f_a1+sigma_a*a_c1,
+    f_a4=2*f_a3-f_a2+sigma_a*a_c2,
+    f_a5=2*f_a4-f_a3+sigma_a*a_c3,
+    f_b1=b0, f_b2=b0+b1,
+    f_b3=2*f_b2-f_b1+sigma_b*b_c1,
+    f_b4=2*f_b3-f_b2+sigma_b*b_c2,
+    f_b5=2*f_b4-f_b3+sigma_b*b_c3,
+    # one participant draw per condition (log scale)
+    la1=rnorm(1,f_a1,tau_a1),la2=rnorm(1,f_a2,tau_a2),la3=rnorm(1,f_a3,tau_a3),la4=rnorm(1,f_a4,tau_a4),la5=rnorm(1,f_a5,tau_a5),
+    lb1=rnorm(1,f_b1,tau_b1),lb2=rnorm(1,f_b2,tau_b2),lb3=rnorm(1,f_b3,tau_b3),lb4=rnorm(1,f_b4,tau_b4),lb5=rnorm(1,f_b5,tau_b5),
+    lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
+    kappa=rnorm(1,mu_kappa,tau_kappa)
+  ) %>%
+  full_join(grid_d) %>%
   mutate(
-    at1=at==30,
-    at2=at==31,
-    at4=at==33,
-    at5=at==34,
-    
-    alpha=alpha_int+at1*alpha_d1+at2*alpha_d2+at4*alpha_d4+at5*alpha_d5,
-    beta=exp(log_beta_int+at1*log_beta_d1+at2*log_beta_d2+at4*log_beta_d4+at5*log_beta_d5),
-    
-    cx_s=x-at-alpha,
+    c=at-29,
+    log_alpha_s=case_when(c==1~la1,c==2~la2,c==3~la3,c==4~la4,c==5~la5),
+    log_beta_s =case_when(c==1~lb1,c==2~lb2,c==3~lb3,c==4~lb4,c==5~lb5),
+    log_alpha_g=case_when(c==1~f_a1,c==2~f_a2,c==3~f_a3,c==4~f_a4,c==5~f_a5),
+    log_beta_g =case_when(c==1~f_b1,c==2~f_b2,c==3~f_b3,c==4~f_b4,c==5~f_b5),
+
+    interval_sign=sign(x),
+    alpha=exp(log_alpha_s),
+    beta=exp(log_beta_s),
+    cx_s=abs(x)-alpha,
     stim_rep=cx_s*inv_logit(cx_s*100),
-    theta_s=lambda+(1-2*lambda)*pnorm(beta*stim_rep),
-    
-    alpha_g=mu_alpha_int+at1*mu_alpha_d1+at2*mu_alpha_d2+at4*mu_alpha_d4+at5*mu_alpha_d5,
-    beta_g=exp(mu_log_beta_int+at1*mu_log_beta_d1+at2*mu_log_beta_d2+at4*mu_log_beta_d4+at5*mu_log_beta_d5),
-    
-    cx_g=x-at-alpha_g,
+    theta_s=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa),
+
+    alpha_g=exp(log_alpha_g),
+    beta_g=exp(log_beta_g),
+    cx_g=abs(x)-alpha_g,
     stim_rep_g=cx_g*inv_logit(cx_g*100),
-    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(beta_g*stim_rep_g)
-  ) %>% 
+    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*beta_g*stim_rep_g-mu_kappa)
+  ) %>%
   group_by(at,x) %>% 
   summarise(
     s_lb_ci_95=quantile(theta_s,0.025),
@@ -298,7 +312,7 @@ discrimination_non_mechanistic<-
     names_pattern = "(s|g)_(lb|ub|med)_ci?_?(\\d+)?",
     values_to = "value"
   ) %>% 
-  filter(x>at)
+  filter(TRUE) # response space: keep the full signed deviation range
 
 ribbons <- discrimination_non_mechanistic %>% filter(stat %in% c("lb","ub"))%>% 
   pivot_wider(
@@ -328,13 +342,14 @@ ribbons %>%
     linetype='dotted',
     alpha=.5
   )+
+  geom_vline(aes(xintercept=0),linetype='dotted',alpha=.5)+
   scale_alpha_manual(labels=c('60% CI','80% CI','90% CI','95% CI'),values=c(.4,.3,.2,.1))+
-  scale_x_continuous(breaks=seq(30,45,3))+
-  scale_y_continuous(breaks=c(.5,.75,1))+
+  scale_x_continuous(breaks=seq(-12,12,4))+
+  scale_y_continuous(breaks=c(0,.5,1))+
   labs(
     alpha='',
-    x='Absolute target temperature',
-    y='P(correct)'
+    x='Signed target deviation (°C; + = deviating stimulus in 2nd interval)',
+    y='P(chose 2nd interval)'
   )+
   theme_minimal()+
   facet_grid(rows=vars(level),cols=vars(at))
@@ -443,7 +458,7 @@ rating_relative<-
     intercept=rnorm(1,mu_intercept,tau_intercept),
     slope=exp(rnorm(1,mu_log_slope,tau_log_slope))
   ) %>% 
-  full_join(grid) %>% 
+  full_join(grid_r) %>% 
   mutate(
     cx=(x-at),
     lr=intercept+slope*cx,
@@ -527,56 +542,49 @@ rating_non_mechanistic<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    mu_intercept_3=rnorm(1,-2,1),
-    mu_intercept_d1=rnorm(1,0,1),
-    mu_intercept_d2=rnorm(1,0,1),
-    mu_intercept_d4=rnorm(1,0,1),
-    mu_intercept_d5=rnorm(1,0,1),
-    mu_log_slope_3=rnorm(1,-2,1),
-    mu_log_slope_d1=rnorm(1,0,1),
-    mu_log_slope_d2=rnorm(1,0,1),
-    mu_log_slope_d4=rnorm(1,0,1),
-    mu_log_slope_d5=rnorm(1,0,1),
-    tau_intercept_3=abs(rnorm(1,0,1)),
-    tau_intercept_d1=abs(rnorm(1,0,1)),
-    tau_intercept_d2=abs(rnorm(1,0,1)),
-    tau_intercept_d4=abs(rnorm(1,0,1)),
-    tau_intercept_d5=abs(rnorm(1,0,1)),
-    tau_log_slope_3=abs(rnorm(1,0,1)),
-    tau_log_slope_d1=abs(rnorm(1,0,1)),
-    tau_log_slope_d2=abs(rnorm(1,0,1)),
-    tau_log_slope_d4=abs(rnorm(1,0,1)),
-    tau_log_slope_d5=abs(rnorm(1,0,1)),
-    intercept_3=rnorm(1,mu_intercept_3,tau_intercept_3),
-    intercept_d1=rnorm(1,mu_intercept_d1,tau_intercept_d1),
-    intercept_d2=rnorm(1,mu_intercept_d2,tau_intercept_d2),
-    intercept_d4=rnorm(1,mu_intercept_d4,tau_intercept_d4),
-    intercept_d5=rnorm(1,mu_intercept_d5,tau_intercept_d5),
-    slope_3=rnorm(1,mu_log_slope_3,tau_log_slope_3),
-    slope_d1=rnorm(1,mu_log_slope_d1,tau_log_slope_d1),
-    slope_d2=rnorm(1,mu_log_slope_d2,tau_log_slope_d2),
-    slope_d4=rnorm(1,mu_log_slope_d4,tau_log_slope_d4),
-    slope_d5=rnorm(1,mu_log_slope_d5,tau_log_slope_d5)
-  ) %>% 
-  full_join(grid) %>% 
+    # RW2 group profile of the latent intercept across the ordered AT axis (identity scale)
+    i0=rnorm(1,-2,1),
+    i1=rnorm(1,0,0.5),
+    i_c1=rnorm(1),i_c2=rnorm(1),i_c3=rnorm(1),
+    sigma_i=abs(rnorm(1,0,0.3)),
+    # RW2 group profile of the latent log-slope
+    s0=rnorm(1,-2,1),
+    s1=rnorm(1,0,0.5),
+    s_c1=rnorm(1),s_c2=rnorm(1),s_c3=rnorm(1),
+    sigma_s=abs(rnorm(1,0,0.3)),
+    tau_i1=abs(rnorm(1)),tau_i2=abs(rnorm(1)),tau_i3=abs(rnorm(1)),tau_i4=abs(rnorm(1)),tau_i5=abs(rnorm(1)),
+    tau_s1=abs(rnorm(1)),tau_s2=abs(rnorm(1)),tau_s3=abs(rnorm(1)),tau_s4=abs(rnorm(1)),tau_s5=abs(rnorm(1)),
+    # group-level RW2 profiles
+    f_i1=i0, f_i2=i0+i1,
+    f_i3=2*f_i2-f_i1+sigma_i*i_c1,
+    f_i4=2*f_i3-f_i2+sigma_i*i_c2,
+    f_i5=2*f_i4-f_i3+sigma_i*i_c3,
+    f_s1=s0, f_s2=s0+s1,
+    f_s3=2*f_s2-f_s1+sigma_s*s_c1,
+    f_s4=2*f_s3-f_s2+sigma_s*s_c2,
+    f_s5=2*f_s4-f_s3+sigma_s*s_c3,
+    # one participant draw per condition
+    ii1=rnorm(1,f_i1,tau_i1),ii2=rnorm(1,f_i2,tau_i2),ii3=rnorm(1,f_i3,tau_i3),ii4=rnorm(1,f_i4,tau_i4),ii5=rnorm(1,f_i5,tau_i5),
+    ss1=rnorm(1,f_s1,tau_s1),ss2=rnorm(1,f_s2,tau_s2),ss3=rnorm(1,f_s3,tau_s3),ss4=rnorm(1,f_s4,tau_s4),ss5=rnorm(1,f_s5,tau_s5)
+  ) %>%
+  full_join(grid_r) %>% 
   mutate(
-    at1=at==30,
-    at2=at==31,
-    at4=at==33,
-    at5=at==34,
-    
-    intercept=intercept_3+at1*intercept_d1+at2*intercept_d2+at4*intercept_d4+at5*intercept_d5,
-    slope=exp(slope_3+at1*slope_d1+at2*slope_d2+at4*slope_d4+at5*slope_d5),
-    
-    cx=x-(at+8),
+    c=at-29,
+    intercept=case_when(c==1~ii1,c==2~ii2,c==3~ii3,c==4~ii4,c==5~ii5),
+    log_slope=case_when(c==1~ss1,c==2~ss2,c==3~ss3,c==4~ss4,c==5~ss5),
+    intercept_g=case_when(c==1~f_i1,c==2~f_i2,c==3~f_i3,c==4~f_i4,c==5~f_i5),
+    log_slope_g=case_when(c==1~f_s1,c==2~f_s2,c==3~f_s3,c==4~f_s4,c==5~f_s5),
+
+    slope=exp(log_slope),
+    slope_g=exp(log_slope_g),
+
+    cx=x-at,
     lr=intercept+slope*cx,
     theta_s=inv_logit(lr),
-    
-    intercept_g=mu_intercept_3+at1*mu_intercept_d1+at2*mu_intercept_d2+at4*mu_intercept_d4+at5*mu_intercept_d5,
-    slope_g=exp(mu_log_slope_3+at1*mu_log_slope_d1+at2*mu_log_slope_d2+at4*mu_log_slope_d4+at5*mu_log_slope_d5),    
+
     lr_g=intercept_g+slope_g*cx,
     theta_g=inv_logit(lr_g)
-  ) %>% 
+  ) %>%
   group_by(at,x) %>% 
   summarise(
     s_lb_ci_95=quantile(theta_s,0.025),
