@@ -1,61 +1,76 @@
 # Script to used to iteratively fit the different models to the different simulated datasets
-# Author: Arthur S. Courtin  
-# License: MIT (see LICENSE file) 
+# Author: Arthur S. Courtin
+# License: MIT (see LICENSE file)
+# Edited with the assistance of Claude Code (Anthropic).
 
 #### Set-up environment ####
 library(tidyverse)
 library(cmdstanr)
 library(rslurm)
+library(loo)
 
 rm(list=ls())
 
 wd<-getwd()
 
-if (!dir.exists("recovery_analysis/sampling/c++_models")) {
-  dir.create("recovery_analysis/sampling/c++_models", recursive = TRUE)
+if (!dir.exists("sampling/c++_models")) {
+  dir.create("sampling/c++_models", recursive = TRUE)
 }
-if (!dir.exists("recovery_analysis/sampling/output")) {
-  dir.create("recovery_analysis/sampling/output", recursive = TRUE)
+if (!dir.exists("sampling/output")) {
+  dir.create("sampling/output", recursive = TRUE)
 }
-if (!dir.exists("recovery_analysis/results/fits")) {
-  dir.create("recovery_analysis/results/fits", recursive = TRUE)
+if (!dir.exists("results/fits")) {
+  dir.create("results/fits", recursive = TRUE)
 }
-if (!dir.exists("recovery_analysis/results/loo")) {
-  dir.create("recovery_analysis/results/loo", recursive = TRUE)
+if (!dir.exists("results/loo")) {
+  dir.create("results/loo", recursive = TRUE)
 }
 
 #### Functions ####
 fit_model <- function(iter_info) {
+
   base_dir=iter_info$wd
-  
+  print(iter_info$model_path)
   mod <-   cmdstan_model(
     stan_file = iter_info$model_path,
-    dir = file.path(base_dir, "recovery_analysis","sampling","c++_models"),
-    stanc_options = list("O1")
-  )
-  
+    dir = file.path(base_dir,"sampling","c++_models"),
+    stanc_options = list("O1"),
+    force_recompile=T,
+    compile_model_methods=T
+    )
+  seed=1234
+  pathfinder_fit<-
+    mod$pathfinder(
+      data=iter_info$data_list,
+      psis_resample = F,
+      calculate_lp = F,
+      seed = seed,
+      refresh=500
+    )
+
   fit <- mod$sample(
     data = iter_info$data_list,
-    seed = 12345,
+    seed = seed,
     chains = 4,
     parallel_chains = 4,
-    iter_warmup = 2000,
-    iter_sampling = 2000,
+    iter_warmup = 1000,
+    iter_sampling = 1000,
     max_treedepth = 12,
-    adapt_delta = 0.99,
-    refresh = 400
+    adapt_delta = 0.95,
+    init=pathfinder_fit,
+    refresh = 200
   )
-  
-  d <- fit$diagnostic_summary()
-  saveRDS(d, file.path(base_dir, "recovery_analysis","results","fits",paste0("diagnostics_rating_",iter_info$generative,"_",iter_info$fitted,"_",iter_info$dataset,".rds")))
-  
-  s <- fit$summary(c("mu","tau"))
-  saveRDS(s, file.path(base_dir, "recovery_analysis","results","fits",paste0("summary_rating_",iter_info$generative,"_",iter_info$fitted,"_",iter_info$dataset,".rds")))
-  
-  loo <- fit$loo(cores = 4)
-  saveRDS(loo, file.path(base_dir, "recovery_analysis","results","loo",paste0("rating_",iter_info$generative,"_",iter_info$fitted,"_",iter_info$dataset,".rds")))
+  fit$diagnostic_summary() %>% print()
+  fit$summary(c('mu','tau')) %>% print(n=50)
+  fit$save_object(file.path(base_dir, "results","fits",paste0("rating_",iter_info$fitted,'_',iter_info$task,".rds")))
+
+  loo <- fit$loo(cores = 4,moment_match = T)
+  print(loo)
+  saveRDS(loo, file.path(base_dir, "results","loo",paste0("rating_",iter_info$fitted,'_',iter_info$task,".rds")))
 }
+
 #### Compile models ####
+
 model_paths<-
   c(
     file.path(wd,"stan_models","rating_absolute_coding.stan"),
@@ -66,65 +81,57 @@ model_paths<-
 compiled_models <- lapply(model_paths, function(p) {
   cmdstan_model(
     stan_file = p,
-    dir = file.path(wd, "recovery_analysis","sampling","c++_models"),
+    dir = file.path(wd, "sampling","c++_models"),
     stanc_options = list("O1")
   )
 })
 
-names(compiled_models) <- model_paths
-
-#### Extract and aggregate data ####
-model_data <-
-  read_csv("recovery_analysis/simulated_data/absolute_model_rating_data.csv") %>%
+#### Extract data ####
+# baseline_flag==1 marks trials where the probe's pre-trial baseline temperature drifted more
+# than 0.2C from its mean, i.e. the assumed 32C reference did not actually hold for that trial;
+# these are excluded before fitting. confirmed==0 marks ratings the participant did not
+# explicitly confirm; these are excluded too.
+data <-
+  read_csv("data/d_at_ratings.csv")%>%
+  filter(baseline_flag == 0, confirmed == 1) %>%
   mutate(
     relative_adapting_temperature =
-    absolute_adapting_temperature - recorded_baseline_temperature,
+    round(adapting - baseline),
     adapting_temperature_idx = 3 + relative_adapting_temperature
     )
-
-model_data <-
-  read_csv("recovery_analysis/simulated_data/relative_model_rating_data.csv") %>%
-  mutate(
-    relative_adapting_temperature =
-    absolute_adapting_temperature - recorded_baseline_temperature,
-    adapting_temperature_idx = 3 + relative_adapting_temperature,
-    dataset=dataset+50
-    ) %>%
-  full_join(model_data)
-
-#### Prepare lists for fitting runs ##############
-mod_comb<-expand_grid(dataset=59,fitted=1)
-iter_info<-list()
-for(m in 1:dim(mod_comb)[1]){
-  sample_data <- model_data %>%
-    filter(dataset == mod_comb$dataset[m])
-  
-  data_list <- list(
-    N  = nrow(sample_data),
-    P  = length(unique(sample_data$participant)),
-    is_cold = 0,
-    recorded_baseline_temperature = sample_data$recorded_baseline_temperature,
-    
-    absolute_target_temperature = sample_data$absolute_target_temperature,
-    
-    absolute_adapting_temperature = sample_data$absolute_adapting_temperature,
-    adapting_temperature_idx = sample_data$adapting_temperature_idx,
-    
-    rating = sample_data$rating,
-    
-    participant = sample_data$participant
-  )
-  
-  iter_info[[m]]<-
-    list(
-      wd=wd,
-      generative=ceiling(mod_comb$dataset[m]/50),
-      fitted=mod_comb$fitted[m],
-      dataset=mod_comb$dataset[m],
-      model_path = model_paths[[mod_comb$fitted[m]]],
-      data_list=data_list
-    )
+participant<-unique(data$participant)
+P<-length(participant)
+for(pdx in 1:P){
+  data$participant[data$participant==participant[pdx]]<-pdx
 }
+#### Prepare lists for fitting runs ##############
+iter_info=list()
+for(t in 0:1){
+  sample_data<-data %>% filter(task==t)
+  for(m in 1:3){
+    data_list <- list(
+      N = nrow(sample_data),
+      P = length(unique(sample_data$participant)),
+      recorded_baseline_temperature = sample_data$baseline,
+      absolute_target_temperature   = sample_data$temperature,
+      absolute_adapting_temperature = sample_data$adapting,
+      rating                        = sample_data$rating,
+      participant                   = sample_data$participant,
+      adapting_temperature_idx      = sample_data$adapting_temperature_idx,
+      is_cold = t==0
+    )
+
+    iter_info[[m+t*3]]<-
+      list(
+        wd=wd,
+        fitted=m,
+        task=t+1,
+        model_path = model_paths[m],
+        data_list=data_list
+      )
+  }
+}
+
 
 #### Launch slurm jobs ####
 dir.create("slurm", showWarnings = FALSE)

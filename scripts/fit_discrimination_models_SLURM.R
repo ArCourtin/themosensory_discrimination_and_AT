@@ -1,6 +1,7 @@
 # Script to used to iteratively fit the different models to the different simulated datasets
 # Author: Arthur S. Courtin  
-# License: MIT (see LICENSE file) 
+# License: MIT (see LICENSE file)
+# Edited with the assistance of Claude Code (Anthropic). 
 
 #### Set-up environment ####
 library(tidyverse)
@@ -40,7 +41,7 @@ fit_model <- function(iter_info) {
   seed=1234
   pathfinder_fit<-
     mod$pathfinder(
-      data=iter_info$data,
+      data=iter_info$data_list,
       psis_resample = F,
       calculate_lp = F,
       seed = seed,
@@ -61,11 +62,11 @@ fit_model <- function(iter_info) {
   )
   fit$diagnostic_summary() %>% print()
   fit$summary(c('mu','tau')) %>% print(n=50)
-  fit$save_object(file.path(base_dir, "results","fits",paste0(iter_info$fitted,'_',iter_info$task,".rds")))
+  fit$save_object(file.path(base_dir, "results","fits",paste0("discrimination_",iter_info$fitted,'_',iter_info$task,".rds")))
   
   loo <- fit$loo(cores = 4,moment_match = T)
   print(loo)
-  saveRDS(loo, file.path(base_dir, "results","loo",paste0(iter_info$fitted,'_',iter_info$task,".rds")))
+  saveRDS(loo, file.path(base_dir, "results","loo",paste0("discrimination_",iter_info$fitted,'_',iter_info$task,".rds")))
 }
 
 #### Compile models ####
@@ -85,15 +86,22 @@ compiled_models <- lapply(model_paths, function(p) {
   )
 })
 
-names(compiled_models) <- model_paths
-
 #### Extract data ####
+# Response coding: `active_interval` gives the 2IFC interval that held the deviating stimulus
+# (1 = first, 2 = second). The second-interval choice is reconstructed from accuracy, i.e.
+# correct & active in interval 2 -> chose 2, correct & active in interval 1 -> chose 1, etc.
+# baseline_flag==1 marks trials where the probe's pre-trial baseline temperature drifted more
+# than 0.2C from its mean, i.e. the assumed 32C reference did not actually hold for that trial;
+# these are excluded before fitting.
 data <-
-  read_csv("data/d_at_2ifc.csv")%>% 
+  read_csv("data/d_at_2ifc.csv")%>%
+  filter(baseline_flag == 0) %>%
   mutate(
     relative_adapting_temperature =
     round(adapting - baseline),
-    adapting_temperature_idx = 3 + relative_adapting_temperature
+    adapting_temperature_idx = 3 + relative_adapting_temperature,
+    interval_sign = if_else(active_interval == 2, 1, -1),
+    chose_second  = as.integer(if_else(active_interval == 2, accuracy, 1L - accuracy))
     )
 participant<-unique(data$participant)
 P<-length(participant)
@@ -111,7 +119,8 @@ for(t in 0:1){
       recorded_baseline_temperature = sample_data$baseline,
       absolute_target_temperature   = sample_data$adapting+t*sample_data$temperature+(t-1)*sample_data$temperature,
       absolute_adapting_temperature = sample_data$adapting,
-      choice_accuracy               = sample_data$accuracy,
+      interval_sign                 = sample_data$interval_sign,
+      chose_second                  = sample_data$chose_second,
       participant                   = sample_data$participant,
       adapting_temperature_idx      = sample_data$adapting_temperature_idx,
       is_cold = t==0
