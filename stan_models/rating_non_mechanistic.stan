@@ -97,13 +97,13 @@ model{
   i0 ~ normal(-2,1);
   i1 ~ normal(0,0.5);
   i_curv ~ std_normal();
-  sigma_i ~ normal(0,0.3);
+  sigma_i ~ normal(0,0.5);
 
   //Priors on the RW2 slope profile (s0 matches the original slope-reference prior)
   s0 ~ normal(-2,1);
   s1 ~ normal(0,0.5);
   s_curv ~ std_normal();
-  sigma_s ~ normal(0,0.3);
+  sigma_s ~ normal(0,0.5);
 
   mu_lower ~ normal(2,.5);
   mu_upper ~ normal(2,.5);

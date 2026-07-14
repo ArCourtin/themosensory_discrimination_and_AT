@@ -27,7 +27,6 @@ for n=1:n_datasets
             m_r=normrnd(0,2);
         end
         absolute.dataset(n).mu_rho=m_r;
-        absolute.dataset(n).mu_log_alpha=normrnd(-2,1);
         absolute.dataset(n).mu_log_beta=normrnd(0,1);
         absolute.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
         absolute.dataset(n).mu_kappa=normrnd(0,1);
@@ -39,7 +38,6 @@ for n=1:n_datasets
         absolute.dataset(n).mu_log_eta=normrnd(3,1);
 
         absolute.dataset(n).tau_rho=abs(normrnd(0,2));
-        absolute.dataset(n).tau_log_alpha=abs(normrnd(0,1));
         absolute.dataset(n).tau_log_beta=abs(normrnd(0,1));
         absolute.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
         absolute.dataset(n).tau_kappa=abs(normrnd(0,1));
@@ -53,7 +51,6 @@ for n=1:n_datasets
         for p=1:n_participant
             rho(p)=normrnd(absolute.dataset(n).mu_rho,absolute.dataset(n).tau_rho);
             absolute.dataset(n).participant(p).rho=rho(p);
-            absolute.dataset(n).participant(p).alpha=exp(normrnd(absolute.dataset(n).mu_log_alpha,absolute.dataset(n).tau_log_alpha));
             absolute.dataset(n).participant(p).beta=exp(normrnd(absolute.dataset(n).mu_log_beta,absolute.dataset(n).tau_log_beta));
             absolute.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(absolute.dataset(n).mu_hlogit_lambda,absolute.dataset(n).tau_hlogit_lambda)));
             absolute.dataset(n).participant(p).kappa=normrnd(absolute.dataset(n).mu_kappa,absolute.dataset(n).tau_kappa);
@@ -71,22 +68,25 @@ for n=1:n_datasets
         figure
         hold on
         for p=1:n_participant
-            alpha=absolute.dataset(n).participant(p).alpha;
             rho=absolute.dataset(n).participant(p).rho;
             beta=absolute.dataset(n).participant(p).beta;
             lambda=absolute.dataset(n).participant(p).lambda;
             kappa=absolute.dataset(n).participant(p).kappa;
-    
+
             for at=adapting_temperatures
                 % Response-coded 2IFC: d is the signed target deviation, interval_sign flags which
                 % interval held the deviating stimulus and kappa is the interval bias (matches the
-                % simulated model below and plot_priors.R). y = P(chose 2nd interval).
+                % simulated model below and plot_priors.R). Evidence is the difference between the
+                % target's and the adapting temperature's absolute (baseline+rho anchored)
+                % representations - no separate detection threshold. y = P(chose 2nd interval).
                 interval_sign=sign(d);
                 target=at+abs(d);
-                x_c=target-baseline_temperature-rho;
-                stim_rep=x_c./(1+exp(-100*x_c));
-                adapt_stim_rep=stim_rep./(1+exp(-100*(stim_rep-(at-baseline_temperature+alpha-rho))));
-                theta=lambda+(1-2*lambda)*normcdf(interval_sign.*beta.*adapt_stim_rep-kappa);
+                target_c=target-baseline_temperature-rho;
+                adapting_c=at-baseline_temperature-rho;
+                target_rep=target_c./(1+exp(-100*target_c));
+                adapting_rep=adapting_c./(1+exp(-100*adapting_c));
+                stim_rep=target_rep-adapting_rep;
+                theta=lambda+(1-2*lambda)*normcdf(interval_sign.*beta.*stim_rep-kappa);
                 plot(d,theta)
             end
         end
@@ -110,7 +110,6 @@ end
 %% Generate group and participant parameters for the relative model
 close all
 for n=1:n_datasets
-    relative.dataset(n).mu_log_alpha=normrnd(-2,1);
     relative.dataset(n).mu_log_beta=normrnd(0,1);
     relative.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
     relative.dataset(n).mu_kappa=normrnd(0,1);
@@ -121,7 +120,6 @@ for n=1:n_datasets
     relative.dataset(n).mu_log_ub=normrnd(2,.5);
     relative.dataset(n).mu_log_eta=normrnd(3,1);
     
-    relative.dataset(n).tau_log_alpha=abs(normrnd(0,1));
     relative.dataset(n).tau_log_beta=abs(normrnd(0,1));
     relative.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
     relative.dataset(n).tau_kappa=abs(normrnd(0,1));
@@ -133,7 +131,6 @@ for n=1:n_datasets
     relative.dataset(n).tau_log_eta=abs(normrnd(3,1));
     
     for p=1:n_participant
-        relative.dataset(n).participant(p).alpha=exp(normrnd(relative.dataset(n).mu_log_alpha,relative.dataset(n).tau_log_alpha));
         relative.dataset(n).participant(p).beta=exp(normrnd(relative.dataset(n).mu_log_beta,relative.dataset(n).tau_log_beta));
         relative.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(relative.dataset(n).mu_hlogit_lambda,relative.dataset(n).tau_hlogit_lambda)));
         relative.dataset(n).participant(p).kappa=normrnd(relative.dataset(n).mu_kappa,relative.dataset(n).tau_kappa);
@@ -150,18 +147,17 @@ for n=1:n_datasets
         figure
         hold on
         for p=1:n_participant
-        alpha=relative.dataset(n).participant(p).alpha;
         beta=relative.dataset(n).participant(p).beta;
         lambda=relative.dataset(n).participant(p).lambda;
         kappa=relative.dataset(n).participant(p).kappa;
-    
+
             for at=adapting_temperatures
                 % Response-coded 2IFC: d is the signed target deviation, interval_sign flags which
                 % interval held the deviating stimulus and kappa is the interval bias (matches the
                 % simulated model below and plot_priors.R). Relative coding is at-invariant, so the
                 % five adapting-temperature curves overlap. y = P(chose 2nd interval).
                 interval_sign=sign(d);
-                x_c=abs(d)-alpha;
+                x_c=abs(d);
                 stim_rep=x_c./(1+exp(-100*x_c));
                 theta=lambda+(1-2*lambda)*normcdf(interval_sign.*beta.*stim_rep-kappa);
                 plot(d,theta)
@@ -208,7 +204,6 @@ for n=1:n_datasets
     fprintf('Simulating absolute coding dataset %i out of %i \n',n,n_datasets)
     for p=1:n_participant
         fprintf('Participant %i out of %i \n',p,n_participant)
-        alpha=absolute.dataset(n).participant(p).alpha;
         rho=absolute.dataset(n).participant(p).rho;
         beta=absolute.dataset(n).participant(p).beta;
         lambda=absolute.dataset(n).participant(p).lambda;        
@@ -226,8 +221,11 @@ for n=1:n_datasets
             for t=1:n_trial
                 relative_target = PMl.xCurrent;
                 absolute_target = relative_target + at;
-                stimulus_representation = (absolute_target-baseline_temperature-rho)/(1+exp(-100*(absolute_target-baseline_temperature-rho)));
-                adapted_stimulus_representation = stimulus_representation/(1+exp(-100*(stimulus_representation-(at-baseline_temperature+alpha-rho))));
+                target_c = absolute_target-baseline_temperature-rho;
+                adapting_c = at-baseline_temperature-rho;
+                target_representation = target_c/(1+exp(-100*target_c));
+                adapting_representation = adapting_c/(1+exp(-100*adapting_c));
+                adapted_stimulus_representation = target_representation-adapting_representation;
                 % Response-coded 2IFC. Which interval holds the deviating stimulus is exactly
                 % balanced within each condition: generated up front in blocks of 6 (3 first-interval,
                 % 3 second-interval), matching the experiment. The second-interval choice is drawn
@@ -296,18 +294,15 @@ for n=1:n_datasets
     
     mr=absolute.dataset(n).mu_rho;
     mlb=absolute.dataset(n).mu_log_beta;
-    mla=absolute.dataset(n).mu_log_alpha;
     mll=absolute.dataset(n).mu_hlogit_lambda;
     mk=absolute.dataset(n).mu_kappa;
 
     tr=absolute.dataset(n).tau_rho;
     tlb=absolute.dataset(n).tau_log_beta;
-    tla=absolute.dataset(n).tau_log_alpha;
     tll=absolute.dataset(n).tau_hlogit_lambda;
     tk=absolute.dataset(n).tau_kappa;
-        
+
     for p=1:n_participant
-        alpha=absolute.dataset(n).participant(p).alpha;
         beta=absolute.dataset(n).participant(p).beta;
         rho=absolute.dataset(n).participant(p).rho;
         lambda=absolute.dataset(n).participant(p).lambda;
@@ -323,10 +318,10 @@ for n=1:n_datasets
 
                 rows(row_idx,:)={...
                     n,'a',...
-                    mr,mla,mlb,mll,mk,...
-                    tr,tla,tlb,tll,tk,...
+                    mr,mlb,mll,mk,...
+                    tr,tlb,tll,tk,...
                     p,...
-                    alpha,rho,beta,lambda,kappa,...
+                    rho,beta,lambda,kappa,...
                     baseline_temperature,at,...
                     t,tt,ca,ai...
                     };
@@ -340,17 +335,14 @@ absolute_table = cell2table(rows, ...
         'dataset', ...
         'model', ...
         'mu_rho',...
-        'mu_log_alpha',...
         'mu_log_beta',...
         'mu_hlogit_lambda',...
         'mu_kappa',...
         'tau_rho',...
-        'tau_log_alpha',...
         'tau_log_beta',...
         'tau_hlogit_lambda',...
         'tau_kappa',...
         'participant', ...
-        'alpha', ...
         'rho', ...
         'beta', ...
         'lambda', ...
@@ -443,7 +435,6 @@ for n=1:n_datasets
     fprintf('Simulating relative coding dataset %i out of %i \n',n,n_datasets)
     for p=1:n_participant
         fprintf('Participant %i out of %i \n',p,n_participant)
-        alpha=relative.dataset(n).participant(p).alpha;
         beta=relative.dataset(n).participant(p).beta;
         lambda=relative.dataset(n).participant(p).lambda;        
 
@@ -460,7 +451,7 @@ for n=1:n_datasets
             for t=1:n_trial
                 relative_target = PMl.xCurrent;
                 absolute_target = relative_target + at;
-                stimulus_representation = (relative_target-alpha)/(1+exp(-100*(relative_target-alpha)));
+                stimulus_representation = relative_target/(1+exp(-100*relative_target));
                 % Response-coded 2IFC. Which interval holds the deviating stimulus is exactly
                 % balanced within each condition: generated up front in blocks of 6 (3 first-interval,
                 % 3 second-interval), matching the experiment. The second-interval choice is drawn
@@ -527,18 +518,15 @@ rows={};
 row_idx=1;
 for n=1:n_datasets
     
-    mla=relative.dataset(n).mu_log_alpha;
     mlb=relative.dataset(n).mu_log_beta;
     mll=relative.dataset(n).mu_hlogit_lambda;
     mk=relative.dataset(n).mu_kappa;
 
-    tla=relative.dataset(n).tau_log_alpha;
     tlb=relative.dataset(n).tau_log_beta;
     tll=relative.dataset(n).tau_hlogit_lambda;
     tk=relative.dataset(n).tau_kappa;
-        
+
     for p=1:n_participant
-        alpha=relative.dataset(n).participant(p).alpha;
         beta=relative.dataset(n).participant(p).beta;
         lambda=relative.dataset(n).participant(p).lambda;
         kappa=relative.dataset(n).participant(p).kappa;
@@ -553,10 +541,10 @@ for n=1:n_datasets
 
                 rows(row_idx,:)={...
                     n,'r',...
-                    mla,mlb,mll,mk,...
-                    tla,tlb,tll,tk,...
+                    mlb,mll,mk,...
+                    tlb,tll,tk,...
                     p,...
-                    alpha,beta,lambda,kappa,...
+                    beta,lambda,kappa,...
                     baseline_temperature,at,...
                     t,tt,ca,ai...
                     };
@@ -569,16 +557,13 @@ relative_table = cell2table(rows, ...
     'VariableNames', { ...
         'dataset', ...
         'model', ...
-        'mu_log_alpha',...
         'mu_log_beta',...
         'mu_hlogit_lambda',...
         'mu_kappa',...
-        'tau_log_alpha',...
         'tau_log_beta',...
         'tau_hlogit_lambda',...
         'tau_kappa',...
         'participant', ...
-        'alpha', ...
         'beta', ...
         'lambda', ...
         'kappa', ...

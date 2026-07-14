@@ -95,13 +95,13 @@ model{
   a0 ~ normal(-2,1);
   a1 ~ normal(0,0.5);
   a_curv ~ std_normal();
-  sigma_a ~ normal(0,0.3);
+  sigma_a ~ normal(0,0.5);
 
   //Priors on the RW2 beta profile (b0 matches the original beta-mean prior)
   b0 ~ normal(0,1);
   b1 ~ normal(0,0.5);
   b_curv ~ std_normal();
-  sigma_b ~ normal(0,0.3);
+  sigma_b ~ normal(0,0.5);
 
   mu_lambda ~ normal(-4,1);
   mu_kappa ~ normal(0,1);

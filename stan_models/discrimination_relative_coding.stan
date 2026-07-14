@@ -1,5 +1,7 @@
 //This Stan program implements a hierarchical version of the "complete habituation - relative coding" model of thermosensory discrimination
 //Response-coded: the outcome is the second-interval choice of a 2IFC task, not accuracy.
+//Evidence is the soft-rectified deviation of the target from the adapting temperature; there is no
+//separate detection-threshold parameter (the threshold is carried by beta).
 //Licence: MIT
 //Author: Arthur S. Courtin
 
@@ -22,7 +24,7 @@ transformed data{
     deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
   }
 
-  int M=4;
+  int M=3;
 }
 parameters{
   vector[M] mu;
@@ -31,7 +33,6 @@ parameters{
   cholesky_factor_corr[M] L;
 }
 transformed parameters{
-  vector[P] alpha;
   vector[P] beta;
   vector[P] lambda;
   vector[P] kappa;
@@ -40,28 +41,27 @@ transformed parameters{
   {
     matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
 
-    alpha = exp(mu[1] + delta_participant[,1]);
-    beta = exp(mu[2] + delta_participant[,2]);
-    lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
-    kappa = mu[4] + delta_participant[,4];
+    beta = exp(mu[1] + delta_participant[,1]);
+    lambda = .5 * inv_logit(mu[2] + delta_participant[,2]);
+    kappa = mu[3] + delta_participant[,3];
 
-    vector[N] centered_stimulus = deviation_from_adapting_temperature - alpha[participant];
-    vector[N] stimulus_representation = centered_stimulus .* inv_logit(100*centered_stimulus);
+    // Relative coding: the representation is referenced to the adapting temperature (complete
+    // habituation), so the discrimination evidence is the soft-rectified deviation of the target
+    // from the adapting temperature.
+    vector[N] stimulus_representation = deviation_from_adapting_temperature .* inv_logit(100*deviation_from_adapting_temperature);
 
     theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) - kappa[participant]);
   }
 }
 model{
   //Priors
-  mu[1] ~ normal(-2,1);
-  mu[2] ~ normal(0,1);
-  mu[3] ~ normal(-4,1);
-  mu[4] ~ normal(0,1);
+  mu[1] ~ normal(0,1);
+  mu[2] ~ normal(-4,1);
+  mu[3] ~ normal(0,1);
 
   tau[1] ~ normal(0,1);
   tau[2] ~ normal(0,1);
   tau[3] ~ normal(0,1);
-  tau[4] ~ normal(0,1);
 
   L ~ lkj_corr_cholesky(2);
 

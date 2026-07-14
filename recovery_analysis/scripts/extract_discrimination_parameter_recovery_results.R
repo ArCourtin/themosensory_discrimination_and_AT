@@ -31,7 +31,7 @@ model_data <-
   full_join(model_data)%>% 
   filter(trial==1,participant==1,adapting_temperature_idx==1) %>% 
   pivot_longer(
-    cols=c('mu_log_alpha','mu_rho','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_alpha','tau_rho','tau_log_beta','tau_hlogit_lambda','tau_kappa'),
+    cols=c('mu_rho','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_rho','tau_log_beta','tau_hlogit_lambda','tau_kappa'),
     names_to='variable',
     values_to = 'truth'
     )
@@ -44,7 +44,7 @@ for(dataset in 1:n_datasets){
     mutate(
       dataset=dataset,
       model='a',
-      variable=c('mu_rho','mu_log_alpha','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_rho','tau_log_alpha','tau_log_beta','tau_hlogit_lambda','tau_kappa')
+      variable=c('mu_rho','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_rho','tau_log_beta','tau_hlogit_lambda','tau_kappa')
       ) %>% 
     bind_rows(result_summary)
 }
@@ -53,7 +53,7 @@ for(dataset in (n_datasets+1):(2*n_datasets)){
     mutate(
       dataset=dataset,
       model='r',
-      variable=c('mu_log_alpha','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_alpha','tau_log_beta','tau_hlogit_lambda','tau_kappa')
+      variable=c('mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_beta','tau_hlogit_lambda','tau_kappa')
     ) %>%     
     bind_rows(result_summary)
 }
@@ -63,7 +63,7 @@ pooled<-result_summary %>%
   filter(!is.na(truth)) %>% 
   mutate(
     model=factor(model,c('a','r'),c('absolute','relative')),
-    variable=factor(variable,c('mu_log_alpha','mu_rho','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_alpha','tau_rho','tau_log_beta','tau_hlogit_lambda','tau_kappa'))
+    variable=factor(variable,c('mu_rho','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_rho','tau_log_beta','tau_hlogit_lambda','tau_kappa'))
     )
 
 pooled %>% 

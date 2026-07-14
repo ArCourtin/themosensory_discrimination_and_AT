@@ -1,5 +1,7 @@
 //This Stan program implements a hierarchical version of the "no habituation - absolute coding" model of thermosensory discrimination
 //Response-coded: the outcome is the second-interval choice of a 2IFC task, not accuracy.
+//Evidence is the difference between the target's and the adapting temperature's absolute (baseline-anchored)
+//representations; there is no separate detection-threshold parameter (the threshold is carried by beta).
 //Licence: MIT
 //Author: Arthur S. Courtin
 
@@ -25,7 +27,7 @@ transformed data{
     centered_absolute_target_temperature = absolute_target_temperature - recorded_baseline_temperature;
     centered_absolute_adapting_temperature = absolute_adapting_temperature - recorded_baseline_temperature;
   }
-  int M=5;
+  int M=4;
 }
 parameters{
   vector[M] mu;
@@ -34,7 +36,6 @@ parameters{
   cholesky_factor_corr[M] L;
 }
 transformed parameters{
-  vector[P] alpha;
   vector[P] rho;
   vector[P] beta;
   vector[P] lambda;
@@ -45,31 +46,35 @@ transformed parameters{
     matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
 
     rho = mu[1] + delta_participant[,1];
-    alpha = exp(mu[2] + delta_participant[,2]);
-    beta = exp(mu[3] + delta_participant[,3]);
-    lambda = .5 * inv_logit(mu[4] + delta_participant[,4]);
-    kappa = mu[5] + delta_participant[,5];
+    beta = exp(mu[2] + delta_participant[,2]);
+    lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
+    kappa = mu[4] + delta_participant[,4];
 
-    vector[N] centered_stimulus = centered_absolute_target_temperature - rho[participant];
-    vector[N] stimulus_representation = centered_stimulus .* inv_logit(100*centered_stimulus);
-    vector[N] adapted_stimulus_representation = stimulus_representation .* inv_logit(100.*(stimulus_representation-(centered_absolute_adapting_temperature+alpha[participant]-rho[participant])));
+    // Absolute coding: each interval's warm-channel activation is the soft-rectified distance from
+    // the absolute reference (baseline + rho), i.e. no recentering on the adapting temperature. The
+    // discrimination evidence is the difference between the target's and the adapting temperature's
+    // absolute representations, so the two accounts coincide for warm-adapting conditions and diverge
+    // only when the adapting temperature falls below the absolute reference (cold-adapting).
+    vector[N] centered_target = centered_absolute_target_temperature - rho[participant];
+    vector[N] centered_adapting = centered_absolute_adapting_temperature - rho[participant];
+    vector[N] target_representation = centered_target .* inv_logit(100*centered_target);
+    vector[N] adapting_representation = centered_adapting .* inv_logit(100*centered_adapting);
+    vector[N] stimulus_representation = target_representation - adapting_representation;
 
-    theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* adapted_stimulus_representation) - kappa[participant]);
+    theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) - kappa[participant]);
   }
 }
 model{
   //Priors
   mu[1] ~ normal(0,2);
-  mu[2] ~ normal(-2,1);
-  mu[3] ~ normal(0,1);
-  mu[4] ~ normal(-4,1);
-  mu[5] ~ normal(0,1);
+  mu[2] ~ normal(0,1);
+  mu[3] ~ normal(-4,1);
+  mu[4] ~ normal(0,1);
 
   tau[1] ~ normal(0,2);
   tau[2] ~ normal(0,1);
   tau[3] ~ normal(0,1);
   tau[4] ~ normal(0,1);
-  tau[5] ~ normal(0,1);
 
   L ~ lkj_corr_cholesky(2);
 
