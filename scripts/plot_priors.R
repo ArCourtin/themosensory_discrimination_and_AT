@@ -26,15 +26,12 @@ discrimination_absolute<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    mu_log_alpha=rnorm(1,-2,1),
     mu_rho=rnorm(1,0,2),
     mu_log_beta=rnorm(1),
     mu_logit_lambda=rnorm(1,-4,1),
-    tau_log_alpha=abs(rnorm(1,0,1)),
     tau_rho=abs(rnorm(1,0,2)),
     tau_log_beta=abs(rnorm(1)),
     tau_logit_lambda=abs(rnorm(1)),
-    alpha=exp(rnorm(1,mu_log_alpha,tau_log_alpha)),
     rho=rnorm(1,mu_rho,tau_rho),
     beta=exp(rnorm(1,mu_log_beta,tau_log_beta)),
     lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
@@ -42,20 +39,24 @@ discrimination_absolute<-
     tau_kappa=abs(rnorm(1,0,1)),
     kappa=rnorm(1,mu_kappa,tau_kappa)
   ) %>%
+  ungroup() %>%
   full_join(grid_d) %>%
   mutate(
+    # Evidence is the difference between the target's and the adapting temperature's absolute
+    # (baseline+rho anchored) representations - no separate detection threshold (matches
+    # discrimination_absolute_coding.stan).
     interval_sign=sign(x),
     target=at+abs(x),
-    cx_s=target-32-rho,
-    stim_rep=cx_s*inv_logit(cx_s*100),
-    adapt_stim_rep=stim_rep*inv_logit(100*(stim_rep-(at-32+alpha-rho))),
-    theta_s=lambda+(1-2*lambda)*pnorm(interval_sign*beta*adapt_stim_rep-kappa),
-    
-    cx_g=target-32-mu_rho,
-    stim_rep_g=cx_g*inv_logit(cx_g*100),
-    adapt_stim_rep_g=stim_rep_g*inv_logit(100*(stim_rep_g-(at-32+exp(mu_log_alpha)-mu_rho))),
-    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*adapt_stim_rep_g-mu_kappa)
-    ) %>% 
+    cx_target_s=target-32-rho,
+    cx_adapting_s=at-32-rho,
+    stim_rep=cx_target_s*inv_logit(cx_target_s*100) - cx_adapting_s*inv_logit(cx_adapting_s*100),
+    theta_s=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa),
+
+    cx_target_g=target-32-mu_rho,
+    cx_adapting_g=at-32-mu_rho,
+    stim_rep_g=cx_target_g*inv_logit(cx_target_g*100) - cx_adapting_g*inv_logit(cx_adapting_g*100),
+    theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g-mu_kappa)
+    ) %>%
   group_by(at,x) %>% 
   summarise(
     s_lb_ci_95=quantile(theta_s,0.025),
@@ -132,27 +133,27 @@ discrimination_relative<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    mu_log_alpha=rnorm(1,-2,1),
     mu_log_beta=rnorm(1),
     mu_logit_lambda=rnorm(1,-4,1),
-    tau_log_alpha=abs(rnorm(1)),
     tau_log_beta=abs(rnorm(1)),
     tau_logit_lambda=abs(rnorm(1)),
-    alpha=exp(rnorm(1,mu_log_alpha,tau_log_alpha)),
     beta=exp(rnorm(1,mu_log_beta,tau_log_beta)),
     lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
     mu_kappa=rnorm(1,0,1),
     tau_kappa=abs(rnorm(1,0,1)),
     kappa=rnorm(1,mu_kappa,tau_kappa)
   ) %>%
+  ungroup() %>%
   full_join(grid_d) %>%
   mutate(
+    # Evidence is the soft-rectified deviation from the adapting temperature - no separate
+    # detection threshold (matches discrimination_relative_coding.stan).
     interval_sign=sign(x),
-    cx_s=abs(x)-alpha,
+    cx_s=abs(x),
     stim_rep=cx_s*inv_logit(cx_s*100),
     theta_s=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa),
 
-    cx_g=abs(x)-exp(mu_log_alpha),
+    cx_g=abs(x),
     stim_rep_g=cx_g*inv_logit(cx_g*100),
     theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g-mu_kappa)
   ) %>%
@@ -236,12 +237,12 @@ discrimination_non_mechanistic<-
     a0=rnorm(1,-2,1),
     a1=rnorm(1,0,0.5),
     a_c1=rnorm(1),a_c2=rnorm(1),a_c3=rnorm(1),
-    sigma_a=abs(rnorm(1,0,0.3)),
+    sigma_a=abs(rnorm(1,0,0.5)),
     # RW2 group profile of log-beta
     b0=rnorm(1,0,1),
     b1=rnorm(1,0,0.5),
     b_c1=rnorm(1),b_c2=rnorm(1),b_c3=rnorm(1),
-    sigma_b=abs(rnorm(1,0,0.3)),
+    sigma_b=abs(rnorm(1,0,0.5)),
     mu_logit_lambda=rnorm(1,-4,1),
     mu_kappa=rnorm(1,0,1),
     # per-condition participant SDs, plus lambda/kappa SDs (tau ~ half-normal(0,1))
@@ -264,6 +265,7 @@ discrimination_non_mechanistic<-
     lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
     kappa=rnorm(1,mu_kappa,tau_kappa)
   ) %>%
+  ungroup() %>%
   full_join(grid_d) %>%
   mutate(
     c=at-29,
@@ -367,8 +369,9 @@ rating_absolute<-
     tau_log_slope=abs(rnorm(1,0,1)),
     intercept=rnorm(1,mu_intercept,tau_intercept),
     slope=exp(rnorm(1,mu_log_slope,tau_log_slope))
-  ) %>% 
-  full_join(grid) %>% 
+  ) %>%
+  ungroup() %>%
+  full_join(grid_r) %>%
   mutate(
     cx=(x-32),
     lr=intercept+slope*cx,
@@ -457,8 +460,9 @@ rating_relative<-
     tau_log_slope=abs(rnorm(1,0,1)),
     intercept=rnorm(1,mu_intercept,tau_intercept),
     slope=exp(rnorm(1,mu_log_slope,tau_log_slope))
-  ) %>% 
-  full_join(grid_r) %>% 
+  ) %>%
+  ungroup() %>%
+  full_join(grid_r) %>%
   mutate(
     cx=(x-at),
     lr=intercept+slope*cx,
@@ -546,12 +550,12 @@ rating_non_mechanistic<-
     i0=rnorm(1,-2,1),
     i1=rnorm(1,0,0.5),
     i_c1=rnorm(1),i_c2=rnorm(1),i_c3=rnorm(1),
-    sigma_i=abs(rnorm(1,0,0.3)),
+    sigma_i=abs(rnorm(1,0,0.5)),
     # RW2 group profile of the latent log-slope
     s0=rnorm(1,-2,1),
     s1=rnorm(1,0,0.5),
     s_c1=rnorm(1),s_c2=rnorm(1),s_c3=rnorm(1),
-    sigma_s=abs(rnorm(1,0,0.3)),
+    sigma_s=abs(rnorm(1,0,0.5)),
     tau_i1=abs(rnorm(1)),tau_i2=abs(rnorm(1)),tau_i3=abs(rnorm(1)),tau_i4=abs(rnorm(1)),tau_i5=abs(rnorm(1)),
     tau_s1=abs(rnorm(1)),tau_s2=abs(rnorm(1)),tau_s3=abs(rnorm(1)),tau_s4=abs(rnorm(1)),tau_s5=abs(rnorm(1)),
     # group-level RW2 profiles
@@ -567,7 +571,8 @@ rating_non_mechanistic<-
     ii1=rnorm(1,f_i1,tau_i1),ii2=rnorm(1,f_i2,tau_i2),ii3=rnorm(1,f_i3,tau_i3),ii4=rnorm(1,f_i4,tau_i4),ii5=rnorm(1,f_i5,tau_i5),
     ss1=rnorm(1,f_s1,tau_s1),ss2=rnorm(1,f_s2,tau_s2),ss3=rnorm(1,f_s3,tau_s3),ss4=rnorm(1,f_s4,tau_s4),ss5=rnorm(1,f_s5,tau_s5)
   ) %>%
-  full_join(grid_r) %>% 
+  ungroup() %>%
+  full_join(grid_r) %>%
   mutate(
     c=at-29,
     intercept=case_when(c==1~ii1,c==2~ii2,c==3~ii3,c==4~ii4,c==5~ii5),
