@@ -9,3 +9,9 @@ slurm
 results
 sampling
 
+# Claude Code
+CLAUDE.md
+CLAUDE.local.md
+memory/
+.claude/
+
