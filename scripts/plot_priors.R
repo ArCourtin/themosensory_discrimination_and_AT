@@ -26,7 +26,7 @@ discrimination_absolute<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    mu_rho=rnorm(1,0,2),
+    mu_rho=rnorm(1,2,2),
     mu_log_beta=rnorm(1),
     mu_logit_lambda=rnorm(1,-4,1),
     tau_rho=abs(rnorm(1,0,2)),

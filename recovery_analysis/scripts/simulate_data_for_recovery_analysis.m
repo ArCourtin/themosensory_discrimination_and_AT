@@ -20,47 +20,39 @@ plot_pp=0;
 %% Generate group and participant parameters for the absolute model
 close all
 for n=1:n_datasets
-    rho(1:n_participant)=-10;
-    while any(rho<-2)
-        m_r=-10;
-        while m_r<-2
-            m_r=normrnd(0,2);
-        end
-        absolute.dataset(n).mu_rho=m_r;
-        absolute.dataset(n).mu_log_beta=normrnd(0,1);
-        absolute.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
-        absolute.dataset(n).mu_kappa=normrnd(0,1);
+    absolute.dataset(n).mu_rho=normrnd(2,2);
+    absolute.dataset(n).mu_log_beta=normrnd(0,1);
+    absolute.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
+    absolute.dataset(n).mu_kappa=normrnd(0,1);
 
-        absolute.dataset(n).mu_intercept=normrnd(-2,1);
-        absolute.dataset(n).mu_log_slope=normrnd(-2,1);
-        absolute.dataset(n).mu_log_lb=normrnd(2,.5);
-        absolute.dataset(n).mu_log_ub=normrnd(2,.5);
-        absolute.dataset(n).mu_log_eta=normrnd(3,1);
+    absolute.dataset(n).mu_intercept=normrnd(-2,1);
+    absolute.dataset(n).mu_log_slope=normrnd(-2,1);
+    absolute.dataset(n).mu_log_lb=normrnd(2,.5);
+    absolute.dataset(n).mu_log_ub=normrnd(2,.5);
+    absolute.dataset(n).mu_log_eta=normrnd(3,1);
 
-        absolute.dataset(n).tau_rho=abs(normrnd(0,2));
-        absolute.dataset(n).tau_log_beta=abs(normrnd(0,1));
-        absolute.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
-        absolute.dataset(n).tau_kappa=abs(normrnd(0,1));
+    absolute.dataset(n).tau_rho=abs(normrnd(0,2));
+    absolute.dataset(n).tau_log_beta=abs(normrnd(0,1));
+    absolute.dataset(n).tau_hlogit_lambda=abs(normrnd(0,1));
+    absolute.dataset(n).tau_kappa=abs(normrnd(0,1));
 
-        absolute.dataset(n).tau_intercept=abs(normrnd(-2,1));
-        absolute.dataset(n).tau_log_slope=abs(normrnd(-2,1));
-        absolute.dataset(n).tau_log_lb=abs(normrnd(2,.5));
-        absolute.dataset(n).tau_log_ub=abs(normrnd(2,.5));
-        absolute.dataset(n).tau_log_eta=abs(normrnd(3,1));
+    absolute.dataset(n).tau_intercept=abs(normrnd(-2,1));
+    absolute.dataset(n).tau_log_slope=abs(normrnd(-2,1));
+    absolute.dataset(n).tau_log_lb=abs(normrnd(2,.5));
+    absolute.dataset(n).tau_log_ub=abs(normrnd(2,.5));
+    absolute.dataset(n).tau_log_eta=abs(normrnd(3,1));
 
-        for p=1:n_participant
-            rho(p)=normrnd(absolute.dataset(n).mu_rho,absolute.dataset(n).tau_rho);
-            absolute.dataset(n).participant(p).rho=rho(p);
-            absolute.dataset(n).participant(p).beta=exp(normrnd(absolute.dataset(n).mu_log_beta,absolute.dataset(n).tau_log_beta));
-            absolute.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(absolute.dataset(n).mu_hlogit_lambda,absolute.dataset(n).tau_hlogit_lambda)));
-            absolute.dataset(n).participant(p).kappa=normrnd(absolute.dataset(n).mu_kappa,absolute.dataset(n).tau_kappa);
+    for p=1:n_participant
+        absolute.dataset(n).participant(p).rho=normrnd(absolute.dataset(n).mu_rho,absolute.dataset(n).tau_rho);
+        absolute.dataset(n).participant(p).beta=exp(normrnd(absolute.dataset(n).mu_log_beta,absolute.dataset(n).tau_log_beta));
+        absolute.dataset(n).participant(p).lambda=.5 /(1+exp(-normrnd(absolute.dataset(n).mu_hlogit_lambda,absolute.dataset(n).tau_hlogit_lambda)));
+        absolute.dataset(n).participant(p).kappa=normrnd(absolute.dataset(n).mu_kappa,absolute.dataset(n).tau_kappa);
 
-            absolute.dataset(n).participant(p).intercept=normrnd(absolute.dataset(n).mu_intercept,absolute.dataset(n).tau_intercept);
-            absolute.dataset(n).participant(p).slope=exp(normrnd(absolute.dataset(n).mu_log_slope,absolute.dataset(n).tau_log_slope));
-            absolute.dataset(n).participant(p).lb=exp(normrnd(absolute.dataset(n).mu_log_lb,absolute.dataset(n).tau_log_lb));
-            absolute.dataset(n).participant(p).ub=exp(normrnd(absolute.dataset(n).mu_log_ub,absolute.dataset(n).tau_log_ub));
-            absolute.dataset(n).participant(p).eta=exp(normrnd(absolute.dataset(n).mu_log_eta,absolute.dataset(n).tau_log_eta));
-        end
+        absolute.dataset(n).participant(p).intercept=normrnd(absolute.dataset(n).mu_intercept,absolute.dataset(n).tau_intercept);
+        absolute.dataset(n).participant(p).slope=exp(normrnd(absolute.dataset(n).mu_log_slope,absolute.dataset(n).tau_log_slope));
+        absolute.dataset(n).participant(p).lb=exp(normrnd(absolute.dataset(n).mu_log_lb,absolute.dataset(n).tau_log_lb));
+        absolute.dataset(n).participant(p).ub=exp(normrnd(absolute.dataset(n).mu_log_ub,absolute.dataset(n).tau_log_ub));
+        absolute.dataset(n).participant(p).eta=exp(normrnd(absolute.dataset(n).mu_log_eta,absolute.dataset(n).tau_log_eta));
     end
     if plot_pp
         x=30:.1:40;

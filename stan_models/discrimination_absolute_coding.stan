@@ -4,6 +4,7 @@
 //representations; there is no separate detection-threshold parameter (the threshold is carried by beta).
 //Licence: MIT
 //Author: Arthur S. Courtin
+//Edited with the assistance of Claude Code (Anthropic).
 
 data{
   int N;
@@ -66,7 +67,12 @@ transformed parameters{
 }
 model{
   //Priors
-  mu[1] ~ normal(0,2);
+  // rho's prior is centered above the warmest tested adapting temperature (baseline+2) rather than
+  // at 0: for rho <= (adapting - baseline), the absolute model collapses to being behaviorally
+  // identical to relative coding (see stimulus_representation above), so a prior centered inside the
+  // tested AT range would place most of the absolute account's prior mass on parameter values where
+  // it isn't actually distinguishable from the model it's meant to compete against.
+  mu[1] ~ normal(2,2);
   mu[2] ~ normal(0,1);
   mu[3] ~ normal(-4,1);
   mu[4] ~ normal(0,1);
