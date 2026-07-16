@@ -20,7 +20,7 @@ plot_pp=0;
 %% Generate group and participant parameters for the absolute model
 close all
 for n=1:n_datasets
-    absolute.dataset(n).mu_rho=normrnd(2,2);
+    absolute.dataset(n).mu_rho=normrnd(0,2);
     absolute.dataset(n).mu_log_beta=normrnd(0,1);
     absolute.dataset(n).mu_hlogit_lambda=normrnd(-4,1);
     absolute.dataset(n).mu_kappa=normrnd(0,1);
@@ -68,16 +68,15 @@ for n=1:n_datasets
             for at=adapting_temperatures
                 % Response-coded 2IFC: d is the signed target deviation, interval_sign flags which
                 % interval held the deviating stimulus and kappa is the interval bias (matches the
-                % simulated model below and plot_priors.R). Evidence is the difference between the
-                % target's and the adapting temperature's absolute (baseline+rho anchored)
-                % representations - no separate detection threshold. y = P(chose 2nd interval).
+                % simulated model below and plot_priors.R). Evidence is zero at and below the adapting
+                % temperature and equal to the raw absolute (baseline+rho anchored) reading above it -
+                % no separate detection threshold. y = P(chose 2nd interval).
                 interval_sign=sign(d);
                 target=at+abs(d);
                 target_c=target-baseline_temperature-rho;
-                adapting_c=at-baseline_temperature-rho;
-                target_rep=target_c./(1+exp(-100*target_c));
-                adapting_rep=adapting_c./(1+exp(-100*adapting_c));
-                stim_rep=target_rep-adapting_rep;
+                absolute_reading=target_c./(1+exp(-100*target_c));
+                mask_gate=1./(1+exp(-100*(absolute_reading-(at-baseline_temperature-rho))));
+                stim_rep=absolute_reading.*mask_gate;
                 theta=lambda+(1-2*lambda)*normcdf(interval_sign.*beta.*stim_rep-kappa);
                 plot(d,theta)
             end
@@ -214,10 +213,9 @@ for n=1:n_datasets
                 relative_target = PMl.xCurrent;
                 absolute_target = relative_target + at;
                 target_c = absolute_target-baseline_temperature-rho;
-                adapting_c = at-baseline_temperature-rho;
-                target_representation = target_c/(1+exp(-100*target_c));
-                adapting_representation = adapting_c/(1+exp(-100*adapting_c));
-                adapted_stimulus_representation = target_representation-adapting_representation;
+                absolute_reading = target_c/(1+exp(-100*target_c));
+                mask_gate = 1/(1+exp(-100*(absolute_reading-(at-baseline_temperature-rho))));
+                adapted_stimulus_representation = absolute_reading*mask_gate;
                 % Response-coded 2IFC. Which interval holds the deviating stimulus is exactly
                 % balanced within each condition: generated up front in blocks of 6 (3 first-interval,
                 % 3 second-interval), matching the experiment. The second-interval choice is drawn

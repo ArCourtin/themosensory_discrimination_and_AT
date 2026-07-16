@@ -26,7 +26,7 @@ discrimination_absolute<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    mu_rho=rnorm(1,2,2),
+    mu_rho=rnorm(1,0,2),
     mu_log_beta=rnorm(1),
     mu_logit_lambda=rnorm(1,-4,1),
     tau_rho=abs(rnorm(1,0,2)),
@@ -42,19 +42,21 @@ discrimination_absolute<-
   ungroup() %>%
   full_join(grid_d) %>%
   mutate(
-    # Evidence is the difference between the target's and the adapting temperature's absolute
-    # (baseline+rho anchored) representations - no separate detection threshold (matches
+    # Evidence is zero at and below the adapting temperature and equal to the raw absolute
+    # (baseline+rho anchored) reading above it - no separate detection threshold (matches
     # discrimination_absolute_coding.stan).
     interval_sign=sign(x),
     target=at+abs(x),
     cx_target_s=target-32-rho,
-    cx_adapting_s=at-32-rho,
-    stim_rep=cx_target_s*inv_logit(cx_target_s*100) - cx_adapting_s*inv_logit(cx_adapting_s*100),
+    absolute_reading_s=cx_target_s*inv_logit(cx_target_s*100),
+    mask_gate_s=inv_logit(100*(absolute_reading_s-(at-32-rho))),
+    stim_rep=absolute_reading_s*mask_gate_s,
     theta_s=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa),
 
     cx_target_g=target-32-mu_rho,
-    cx_adapting_g=at-32-mu_rho,
-    stim_rep_g=cx_target_g*inv_logit(cx_target_g*100) - cx_adapting_g*inv_logit(cx_adapting_g*100),
+    absolute_reading_g=cx_target_g*inv_logit(cx_target_g*100),
+    mask_gate_g=inv_logit(100*(absolute_reading_g-(at-32-mu_rho))),
+    stim_rep_g=absolute_reading_g*mask_gate_g,
     theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g-mu_kappa)
     ) %>%
   group_by(at,x) %>% 

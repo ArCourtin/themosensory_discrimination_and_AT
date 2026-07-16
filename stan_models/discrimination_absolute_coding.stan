@@ -1,7 +1,9 @@
 //This Stan program implements a hierarchical version of the "no habituation - absolute coding" model of thermosensory discrimination
 //Response-coded: the outcome is the second-interval choice of a 2IFC task, not accuracy.
-//Evidence is the difference between the target's and the adapting temperature's absolute (baseline-anchored)
-//representations; there is no separate detection-threshold parameter (the threshold is carried by beta).
+//Evidence is zero at and below the adapting temperature (adaptation masks the absolute reading up to that
+//point) and equal to the raw absolute (baseline+rho anchored) reading everywhere above it; there is no
+//separate detection-threshold parameter (the threshold is carried by beta) and no explicit comparison of
+//two representations - the adapting temperature only sets where the mask releases.
 //Licence: MIT
 //Author: Arthur S. Courtin
 //Edited with the assistance of Claude Code (Anthropic).
@@ -51,28 +53,26 @@ transformed parameters{
     lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
     kappa = mu[4] + delta_participant[,4];
 
-    // Absolute coding: each interval's warm-channel activation is the soft-rectified distance from
-    // the absolute reference (baseline + rho), i.e. no recentering on the adapting temperature. The
-    // discrimination evidence is the difference between the target's and the adapting temperature's
-    // absolute representations, so the two accounts coincide for warm-adapting conditions and diverge
-    // only when the adapting temperature falls below the absolute reference (cold-adapting).
+    // Absolute coding: the target's warm-channel activation is the soft-rectified distance from the
+    // absolute reference (baseline + rho) - no recentering on the adapting temperature. Adaptation does
+    // not shift this reading; it masks it up to the adapting temperature itself (no free window size),
+    // releasing sharply above it. So evidence is ~0 for target readings at or below the adapting
+    // temperature, and ~(target - baseline - rho) above it. When the adapting temperature itself falls
+    // below rho, the mask never engages and the model reduces to pure unmasked absolute coding.
     vector[N] centered_target = centered_absolute_target_temperature - rho[participant];
-    vector[N] centered_adapting = centered_absolute_adapting_temperature - rho[participant];
-    vector[N] target_representation = centered_target .* inv_logit(100*centered_target);
-    vector[N] adapting_representation = centered_adapting .* inv_logit(100*centered_adapting);
-    vector[N] stimulus_representation = target_representation - adapting_representation;
+    vector[N] absolute_reading = centered_target .* inv_logit(100*centered_target);
+    vector[N] mask_gate = inv_logit(100*(absolute_reading - (centered_absolute_adapting_temperature - rho[participant])));
+    vector[N] stimulus_representation = absolute_reading .* mask_gate;
 
     theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) - kappa[participant]);
   }
 }
 model{
   //Priors
-  // rho's prior is centered above the warmest tested adapting temperature (baseline+2) rather than
-  // at 0: for rho <= (adapting - baseline), the absolute model collapses to being behaviorally
-  // identical to relative coding (see stimulus_representation above), so a prior centered inside the
-  // tested AT range would place most of the absolute account's prior mass on parameter values where
-  // it isn't actually distinguishable from the model it's meant to compete against.
-  mu[1] ~ normal(2,2);
+  // rho is the absolute floor below which nothing reads as warm, centered at baseline (0): pushing it
+  // well above the tested range would place the floor above every target temperature, flattening the
+  // model to chance performance on every trial.
+  mu[1] ~ normal(0,2);
   mu[2] ~ normal(0,1);
   mu[3] ~ normal(-4,1);
   mu[4] ~ normal(0,1);

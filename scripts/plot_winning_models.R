@@ -60,8 +60,9 @@ gm_discrimination_absolute<-function(fit,at_seq,d){
       interval_sign=sign(x),
       target=at+abs(x),
       cx_target=target-baseline-rho,
-      cx_adapting=at-baseline-rho,
-      stim_rep=cx_target*inv_logit(100*cx_target) - cx_adapting*inv_logit(100*cx_adapting),
+      absolute_reading=cx_target*inv_logit(100*cx_target),
+      mask_gate=inv_logit(100*(absolute_reading-(at-baseline-rho))),
+      stim_rep=absolute_reading*mask_gate,
       theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa)
     ) %>%
     summarise_theta()
