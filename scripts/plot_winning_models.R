@@ -85,19 +85,13 @@ gm_discrimination_relative<-function(fit,at_seq,d){
 
 gm_discrimination_non_mechanistic<-function(fit,at_seq,d){
   grid<-expand_grid(x=d,at=at_seq)
-  fit$draws(c('a0','a1','a_curv','sigma_a','b0','b1','b_curv','sigma_b','mu_lambda','mu_kappa'),format='df') %>%
+  fit$draws('mu',format='df') %>%
     transmute(
       .draw,
-      f_a1=a0, f_a2=a0+a1,
-      f_a3=2*f_a2-f_a1+sigma_a*`a_curv[1]`,
-      f_a4=2*f_a3-f_a2+sigma_a*`a_curv[2]`,
-      f_a5=2*f_a4-f_a3+sigma_a*`a_curv[3]`,
-      f_b1=b0, f_b2=b0+b1,
-      f_b3=2*f_b2-f_b1+sigma_b*`b_curv[1]`,
-      f_b4=2*f_b3-f_b2+sigma_b*`b_curv[2]`,
-      f_b5=2*f_b4-f_b3+sigma_b*`b_curv[3]`,
-      lambda=.5*inv_logit(mu_lambda),
-      kappa=mu_kappa
+      f_a3=`mu[1]`, f_a4=f_a3+`mu[2]`, f_a5=f_a4+`mu[3]`, f_a2=f_a3+`mu[4]`, f_a1=f_a2+`mu[5]`,
+      f_b3=`mu[6]`, f_b4=f_b3+`mu[7]`, f_b5=f_b4+`mu[8]`, f_b2=f_b3+`mu[9]`, f_b1=f_b2+`mu[10]`,
+      lambda=.5*inv_logit(`mu[11]`),
+      kappa=`mu[12]`
     ) %>%
     thin_draws() %>%
     cross_join(grid) %>%
@@ -137,17 +131,11 @@ gm_rating_relative<-function(fit,at_seq,x_grid){
 
 gm_rating_non_mechanistic<-function(fit,at_seq,x_grid){
   grid<-expand_grid(x=x_grid,at=at_seq)
-  fit$draws(c('i0','i1','i_curv','sigma_i','s0','s1','s_curv','sigma_s'),format='df') %>%
+  fit$draws('mu',format='df') %>%
     transmute(
       .draw,
-      f_i1=i0, f_i2=i0+i1,
-      f_i3=2*f_i2-f_i1+sigma_i*`i_curv[1]`,
-      f_i4=2*f_i3-f_i2+sigma_i*`i_curv[2]`,
-      f_i5=2*f_i4-f_i3+sigma_i*`i_curv[3]`,
-      f_s1=s0, f_s2=s0+s1,
-      f_s3=2*f_s2-f_s1+sigma_s*`s_curv[1]`,
-      f_s4=2*f_s3-f_s2+sigma_s*`s_curv[2]`,
-      f_s5=2*f_s4-f_s3+sigma_s*`s_curv[3]`
+      f_i3=`mu[1]`, f_i4=f_i3+`mu[2]`, f_i5=f_i4+`mu[3]`, f_i2=f_i3+`mu[4]`, f_i1=f_i2+`mu[5]`,
+      f_s3=`mu[6]`, f_s4=f_s3+`mu[7]`, f_s5=f_s4+`mu[8]`, f_s2=f_s3+`mu[9]`, f_s1=f_s2+`mu[10]`
     ) %>%
     thin_draws() %>%
     cross_join(grid) %>%

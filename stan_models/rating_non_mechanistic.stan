@@ -1,11 +1,12 @@
 //This Stan program implements a hierarchical version of the non-mechanistic model of thermosensory magnitude estimation
-//The condition-specific intercept/slope of the latent linear function are free across the ordered adapting-temperature
-//axis, but their group-level profiles are given a second-order random-walk (RW2) prior: the cheap default is linear in
-//adapting temperature, with departures from linearity penalized by an estimated smoothness scale. This keeps the model
-//strictly more flexible than the mechanistic accounts while trimming the wiggle-room no plausible DGP would use, so its
-//role as a competitor in model comparison is a fair one.
+//The condition-specific intercept/slope profiles across the five adapting-temperature conditions are built as a
+//chain of independent steps outward from the AT=baseline condition (condition 3): each step's group mean and its
+//participant-level deviation are ordinary entries in the same mu/tau hierarchy used for the zero/one-inflation
+//bounds and eta, so adjacent AT conditions share more of the same cumulative terms (and so are more likely to be
+//similar) than distant ones, without any shared/estimated smoothness parameter.
 //Licence: MIT
 //Author: Arthur S. Courtin
+//Edited with the assistance of Claude Code (Anthropic).
 
 data{
   int N;
@@ -30,30 +31,12 @@ transformed data{
   int C=5;                                         // adapting-temperature conditions
 }
 parameters{
-  //Group-level RW2 profile of the latent intercept across the ordered adapting-temperature axis (identity scale)
-  real i0;                                        // intercept: level at condition 1
-  real i1;                                        // intercept: initial slope (per AT step)
-  vector[C-2] i_curv;                             // intercept: standardized curvature increments
-  real<lower=0> sigma_i;                          // intercept: curvature scale (smoothness)
-
-  //Group-level RW2 profile of the latent slope across the ordered adapting-temperature axis (log scale)
-  real s0;                                        // slope: level at condition 1
-  real s1;                                        // slope: initial slope (per AT step)
-  vector[C-2] s_curv;                             // slope: standardized curvature increments
-  real<lower=0> sigma_s;                          // slope: curvature scale (smoothness)
-
-  real mu_lower;                                  // group-level lower zero-inflation bound (pre-transform)
-  real mu_upper;                                  // group-level upper one-inflation bound (pre-transform)
-  real mu_eta;                                    // group-level precision (pre-transform)
-
-  //Participant-level non-centered hierarchy (order: 5 intercept, 5 slope, lower, upper, eta)
+  vector[M] mu;
   vector<lower=0>[M] tau;
   matrix[M,P] z;
   cholesky_factor_corr[M] L;
 }
 transformed parameters{
-  vector[C] f_int;                                 // group-level intercept profile across AT
-  vector[C] f_slope;                               // group-level log-slope profile across AT
   matrix[C,P] intercept;
   matrix[C,P] slope;
   row_vector[P] lower_bound;
@@ -62,29 +45,39 @@ transformed parameters{
 
   vector[N] latent_representation;
 
-  //RW2 group profiles: two free anchors (level + first slope), curvature (second differences) penalized by sigma
-  f_int[1] = i0;
-  f_int[2] = i0 + i1;
-  for(c in 3:C){
-    f_int[c] = 2*f_int[c-1] - f_int[c-2] + sigma_i * i_curv[c-2];
-  }
-  f_slope[1] = s0;
-  f_slope[2] = s0 + s1;
-  for(c in 3:C){
-    f_slope[c] = 2*f_slope[c-1] - f_slope[c-2] + sigma_s * s_curv[c-2];
-  }
-
   {
     matrix[M,P] delta_participant = diag_pre_multiply(tau, L) * z;
 
-    for(idx in 1:5){
-      intercept[idx] = f_int[idx] + delta_participant[idx];
-      slope[idx] = exp(f_slope[idx] + delta_participant[idx+5]);
-    }
+    // Intercept profile: mu[1] is the level at condition 3 (adapting temperature = baseline); mu[2]/mu[3]
+    // are the independent outward steps toward conditions 4 and 5, mu[4]/mu[5] the outward steps toward
+    // conditions 2 and 1. Each step's participant-level deviation chains the same way.
+    row_vector[P] i3 = mu[1] + delta_participant[1];
+    row_vector[P] i4 = i3 + mu[2] + delta_participant[2];
+    row_vector[P] i5 = i4 + mu[3] + delta_participant[3];
+    row_vector[P] i2 = i3 + mu[4] + delta_participant[4];
+    row_vector[P] i1 = i2 + mu[5] + delta_participant[5];
+    intercept[1] = i1;
+    intercept[2] = i2;
+    intercept[3] = i3;
+    intercept[4] = i4;
+    intercept[5] = i5;
 
-    lower_bound = exp(mu_lower + delta_participant[11]);
-    upper_bound = exp(mu_upper + delta_participant[12]);
-    eta = exp(mu_eta + delta_participant[13]);
+    // Slope profile: same chained construction, mu[6] the condition-3 (log-scale) level, mu[7]/mu[8] the
+    // outward steps toward conditions 4 and 5, mu[9]/mu[10] the outward steps toward conditions 2 and 1.
+    row_vector[P] s3 = mu[6] + delta_participant[6];
+    row_vector[P] s4 = s3 + mu[7] + delta_participant[7];
+    row_vector[P] s5 = s4 + mu[8] + delta_participant[8];
+    row_vector[P] s2 = s3 + mu[9] + delta_participant[9];
+    row_vector[P] s1 = s2 + mu[10] + delta_participant[10];
+    slope[1] = exp(s1);
+    slope[2] = exp(s2);
+    slope[3] = exp(s3);
+    slope[4] = exp(s4);
+    slope[5] = exp(s5);
+
+    lower_bound = exp(mu[11] + delta_participant[11]);
+    upper_bound = exp(mu[12] + delta_participant[12]);
+    eta = exp(mu[13] + delta_participant[13]);
 
     for(n in 1:N){
       latent_representation[n] = intercept[adapting_temperature_idx[n],participant[n]] + slope[adapting_temperature_idx[n],participant[n]] .* deviation_from_adapting_temperature[n];
@@ -93,21 +86,16 @@ transformed parameters{
   vector[N] mu_rating = inv_logit(latent_representation);
 }
 model{
-  //Priors on the RW2 intercept profile (i0 matches the original intercept-reference prior)
-  i0 ~ normal(-2,1);
-  i1 ~ normal(0,0.5);
-  i_curv ~ std_normal();
-  sigma_i ~ normal(0,0.5);
+  //Intercept profile: mu[1] is the condition-3 (baseline) level, mu[2:5] are independent chained steps
+  mu[1] ~ normal(-2,1);
+  mu[2:5] ~ normal(0,0.5);
 
-  //Priors on the RW2 slope profile (s0 matches the original slope-reference prior)
-  s0 ~ normal(-2,1);
-  s1 ~ normal(0,0.5);
-  s_curv ~ std_normal();
-  sigma_s ~ normal(0,0.5);
+  //Slope profile: mu[6] is the condition-3 (baseline) level, mu[7:10] are independent chained steps
+  mu[6] ~ normal(-2,1);
+  mu[7:10] ~ normal(0,0.5);
 
-  mu_lower ~ normal(2,.5);
-  mu_upper ~ normal(2,.5);
-  mu_eta ~ normal(3,1);
+  mu[11:12] ~ normal(2,.5);
+  mu[13] ~ normal(3,1);
 
   tau ~ normal(0,1);
   tau[11:12] ~ normal(0,.5);

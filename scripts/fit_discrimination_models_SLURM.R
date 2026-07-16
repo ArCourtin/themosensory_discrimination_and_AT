@@ -61,15 +61,7 @@ fit_model <- function(iter_info) {
     refresh = 200
   )
   fit$diagnostic_summary() %>% print()
-  # Models 1-2 (absolute/relative coding) have a group-level mu/tau hierarchy; model 3
-  # (non-mechanistic) instead has named RW2 hyperparameters for the alpha/beta profiles
-  # plus mu_lambda/mu_kappa, so its summary() call needs a different parameter set.
-  summary_params <- list(
-    `1` = c('mu','tau'),
-    `2` = c('mu','tau'),
-    `3` = c('a0','a1','a_curv','sigma_a','b0','b1','b_curv','sigma_b','mu_lambda','mu_kappa','tau')
-  )
-  fit$summary(summary_params[[as.character(iter_info$fitted)]]) %>% print(n=50)
+  fit$summary(c('mu','tau')) %>% print(n=50)
   fit$save_object(file.path(base_dir, "results","fits",paste0("discrimination_",iter_info$fitted,'_',iter_info$task,".rds")))
   
   loo <- fit$loo(cores = 4,moment_match = T)

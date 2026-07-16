@@ -235,35 +235,29 @@ discrimination_non_mechanistic<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    # RW2 group profile of log-alpha across the ordered AT axis (2 anchors + curvature penalised by sigma_a)
-    a0=rnorm(1,-2,1),
-    a1=rnorm(1,0,0.5),
-    a_c1=rnorm(1),a_c2=rnorm(1),a_c3=rnorm(1),
-    sigma_a=abs(rnorm(1,0,0.5)),
-    # RW2 group profile of log-beta
-    b0=rnorm(1,0,1),
-    b1=rnorm(1,0,0.5),
-    b_c1=rnorm(1),b_c2=rnorm(1),b_c3=rnorm(1),
-    sigma_b=abs(rnorm(1,0,0.5)),
+    # Alpha profile: mu1 is the level at condition 3 (AT=baseline), mu2/mu3 the independent outward
+    # steps toward conditions 4/5, mu4/mu5 the outward steps toward conditions 2/1 (matches
+    # discrimination_non_mechanistic.stan).
+    mu1=rnorm(1,-2,1),
+    mu2=rnorm(1,0,0.5),mu3=rnorm(1,0,0.5),mu4=rnorm(1,0,0.5),mu5=rnorm(1,0,0.5),
+    # Beta profile: same chained construction, mu6 the condition-3 level
+    mu6=rnorm(1,0,1),
+    mu7=rnorm(1,0,0.5),mu8=rnorm(1,0,0.5),mu9=rnorm(1,0,0.5),mu10=rnorm(1,0,0.5),
     mu_logit_lambda=rnorm(1,-4,1),
     mu_kappa=rnorm(1,0,1),
-    # per-condition participant SDs, plus lambda/kappa SDs (tau ~ half-normal(0,1))
-    tau_a1=abs(rnorm(1)),tau_a2=abs(rnorm(1)),tau_a3=abs(rnorm(1)),tau_a4=abs(rnorm(1)),tau_a5=abs(rnorm(1)),
-    tau_b1=abs(rnorm(1)),tau_b2=abs(rnorm(1)),tau_b3=abs(rnorm(1)),tau_b4=abs(rnorm(1)),tau_b5=abs(rnorm(1)),
+    # participant-level SDs, one per mu entry (tau ~ half-normal(0,1))
+    tau1=abs(rnorm(1)),tau2=abs(rnorm(1)),tau3=abs(rnorm(1)),tau4=abs(rnorm(1)),tau5=abs(rnorm(1)),
+    tau6=abs(rnorm(1)),tau7=abs(rnorm(1)),tau8=abs(rnorm(1)),tau9=abs(rnorm(1)),tau10=abs(rnorm(1)),
     tau_logit_lambda=abs(rnorm(1)),
     tau_kappa=abs(rnorm(1)),
-    # group-level RW2 profiles (log scale of alpha/beta)
-    f_a1=a0, f_a2=a0+a1,
-    f_a3=2*f_a2-f_a1+sigma_a*a_c1,
-    f_a4=2*f_a3-f_a2+sigma_a*a_c2,
-    f_a5=2*f_a4-f_a3+sigma_a*a_c3,
-    f_b1=b0, f_b2=b0+b1,
-    f_b3=2*f_b2-f_b1+sigma_b*b_c1,
-    f_b4=2*f_b3-f_b2+sigma_b*b_c2,
-    f_b5=2*f_b4-f_b3+sigma_b*b_c3,
-    # one participant draw per condition (log scale)
-    la1=rnorm(1,f_a1,tau_a1),la2=rnorm(1,f_a2,tau_a2),la3=rnorm(1,f_a3,tau_a3),la4=rnorm(1,f_a4,tau_a4),la5=rnorm(1,f_a5,tau_a5),
-    lb1=rnorm(1,f_b1,tau_b1),lb2=rnorm(1,f_b2,tau_b2),lb3=rnorm(1,f_b3,tau_b3),lb4=rnorm(1,f_b4,tau_b4),lb5=rnorm(1,f_b5,tau_b5),
+    # group-level chained profiles (log scale of alpha/beta)
+    f_a3_g=mu1, f_a4_g=f_a3_g+mu2, f_a5_g=f_a4_g+mu3, f_a2_g=f_a3_g+mu4, f_a1_g=f_a2_g+mu5,
+    f_b3_g=mu6, f_b4_g=f_b3_g+mu7, f_b5_g=f_b4_g+mu8, f_b2_g=f_b3_g+mu9, f_b1_g=f_b2_g+mu10,
+    # one participant's chained draw (independent noise per step, ignoring cross-parameter correlation)
+    f_a3_s=mu1+rnorm(1,0,tau1), f_a4_s=f_a3_s+mu2+rnorm(1,0,tau2), f_a5_s=f_a4_s+mu3+rnorm(1,0,tau3),
+    f_a2_s=f_a3_s+mu4+rnorm(1,0,tau4), f_a1_s=f_a2_s+mu5+rnorm(1,0,tau5),
+    f_b3_s=mu6+rnorm(1,0,tau6), f_b4_s=f_b3_s+mu7+rnorm(1,0,tau7), f_b5_s=f_b4_s+mu8+rnorm(1,0,tau8),
+    f_b2_s=f_b3_s+mu9+rnorm(1,0,tau9), f_b1_s=f_b2_s+mu10+rnorm(1,0,tau10),
     lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
     kappa=rnorm(1,mu_kappa,tau_kappa)
   ) %>%
@@ -271,10 +265,10 @@ discrimination_non_mechanistic<-
   full_join(grid_d) %>%
   mutate(
     c=at-29,
-    log_alpha_s=case_when(c==1~la1,c==2~la2,c==3~la3,c==4~la4,c==5~la5),
-    log_beta_s =case_when(c==1~lb1,c==2~lb2,c==3~lb3,c==4~lb4,c==5~lb5),
-    log_alpha_g=case_when(c==1~f_a1,c==2~f_a2,c==3~f_a3,c==4~f_a4,c==5~f_a5),
-    log_beta_g =case_when(c==1~f_b1,c==2~f_b2,c==3~f_b3,c==4~f_b4,c==5~f_b5),
+    log_alpha_s=case_when(c==1~f_a1_s,c==2~f_a2_s,c==3~f_a3_s,c==4~f_a4_s,c==5~f_a5_s),
+    log_beta_s =case_when(c==1~f_b1_s,c==2~f_b2_s,c==3~f_b3_s,c==4~f_b4_s,c==5~f_b5_s),
+    log_alpha_g=case_when(c==1~f_a1_g,c==2~f_a2_g,c==3~f_a3_g,c==4~f_a4_g,c==5~f_a5_g),
+    log_beta_g =case_when(c==1~f_b1_g,c==2~f_b2_g,c==3~f_b3_g,c==4~f_b4_g,c==5~f_b5_g),
 
     interval_sign=sign(x),
     alpha=exp(log_alpha_s),
@@ -548,39 +542,33 @@ rating_non_mechanistic<-
   tibble(idx=idx) %>% 
   rowwise() %>% 
   mutate(
-    # RW2 group profile of the latent intercept across the ordered AT axis (identity scale)
-    i0=rnorm(1,-2,1),
-    i1=rnorm(1,0,0.5),
-    i_c1=rnorm(1),i_c2=rnorm(1),i_c3=rnorm(1),
-    sigma_i=abs(rnorm(1,0,0.5)),
-    # RW2 group profile of the latent log-slope
-    s0=rnorm(1,-2,1),
-    s1=rnorm(1,0,0.5),
-    s_c1=rnorm(1),s_c2=rnorm(1),s_c3=rnorm(1),
-    sigma_s=abs(rnorm(1,0,0.5)),
-    tau_i1=abs(rnorm(1)),tau_i2=abs(rnorm(1)),tau_i3=abs(rnorm(1)),tau_i4=abs(rnorm(1)),tau_i5=abs(rnorm(1)),
-    tau_s1=abs(rnorm(1)),tau_s2=abs(rnorm(1)),tau_s3=abs(rnorm(1)),tau_s4=abs(rnorm(1)),tau_s5=abs(rnorm(1)),
-    # group-level RW2 profiles
-    f_i1=i0, f_i2=i0+i1,
-    f_i3=2*f_i2-f_i1+sigma_i*i_c1,
-    f_i4=2*f_i3-f_i2+sigma_i*i_c2,
-    f_i5=2*f_i4-f_i3+sigma_i*i_c3,
-    f_s1=s0, f_s2=s0+s1,
-    f_s3=2*f_s2-f_s1+sigma_s*s_c1,
-    f_s4=2*f_s3-f_s2+sigma_s*s_c2,
-    f_s5=2*f_s4-f_s3+sigma_s*s_c3,
-    # one participant draw per condition
-    ii1=rnorm(1,f_i1,tau_i1),ii2=rnorm(1,f_i2,tau_i2),ii3=rnorm(1,f_i3,tau_i3),ii4=rnorm(1,f_i4,tau_i4),ii5=rnorm(1,f_i5,tau_i5),
-    ss1=rnorm(1,f_s1,tau_s1),ss2=rnorm(1,f_s2,tau_s2),ss3=rnorm(1,f_s3,tau_s3),ss4=rnorm(1,f_s4,tau_s4),ss5=rnorm(1,f_s5,tau_s5)
+    # Intercept profile: mu1 is the level at condition 3 (AT=baseline), mu2/mu3 the independent outward
+    # steps toward conditions 4/5, mu4/mu5 the outward steps toward conditions 2/1 (matches
+    # rating_non_mechanistic.stan).
+    mu1=rnorm(1,-2,1),
+    mu2=rnorm(1,0,0.5),mu3=rnorm(1,0,0.5),mu4=rnorm(1,0,0.5),mu5=rnorm(1,0,0.5),
+    # Slope profile: same chained construction, mu6 the condition-3 (log-scale) level
+    mu6=rnorm(1,-2,1),
+    mu7=rnorm(1,0,0.5),mu8=rnorm(1,0,0.5),mu9=rnorm(1,0,0.5),mu10=rnorm(1,0,0.5),
+    tau1=abs(rnorm(1)),tau2=abs(rnorm(1)),tau3=abs(rnorm(1)),tau4=abs(rnorm(1)),tau5=abs(rnorm(1)),
+    tau6=abs(rnorm(1)),tau7=abs(rnorm(1)),tau8=abs(rnorm(1)),tau9=abs(rnorm(1)),tau10=abs(rnorm(1)),
+    # group-level chained profiles
+    f_i3_g=mu1, f_i4_g=f_i3_g+mu2, f_i5_g=f_i4_g+mu3, f_i2_g=f_i3_g+mu4, f_i1_g=f_i2_g+mu5,
+    f_s3_g=mu6, f_s4_g=f_s3_g+mu7, f_s5_g=f_s4_g+mu8, f_s2_g=f_s3_g+mu9, f_s1_g=f_s2_g+mu10,
+    # one participant's chained draw (independent noise per step, ignoring cross-parameter correlation)
+    f_i3_s=mu1+rnorm(1,0,tau1), f_i4_s=f_i3_s+mu2+rnorm(1,0,tau2), f_i5_s=f_i4_s+mu3+rnorm(1,0,tau3),
+    f_i2_s=f_i3_s+mu4+rnorm(1,0,tau4), f_i1_s=f_i2_s+mu5+rnorm(1,0,tau5),
+    f_s3_s=mu6+rnorm(1,0,tau6), f_s4_s=f_s3_s+mu7+rnorm(1,0,tau7), f_s5_s=f_s4_s+mu8+rnorm(1,0,tau8),
+    f_s2_s=f_s3_s+mu9+rnorm(1,0,tau9), f_s1_s=f_s2_s+mu10+rnorm(1,0,tau10)
   ) %>%
   ungroup() %>%
   full_join(grid_r) %>%
   mutate(
     c=at-29,
-    intercept=case_when(c==1~ii1,c==2~ii2,c==3~ii3,c==4~ii4,c==5~ii5),
-    log_slope=case_when(c==1~ss1,c==2~ss2,c==3~ss3,c==4~ss4,c==5~ss5),
-    intercept_g=case_when(c==1~f_i1,c==2~f_i2,c==3~f_i3,c==4~f_i4,c==5~f_i5),
-    log_slope_g=case_when(c==1~f_s1,c==2~f_s2,c==3~f_s3,c==4~f_s4,c==5~f_s5),
+    intercept=case_when(c==1~f_i1_s,c==2~f_i2_s,c==3~f_i3_s,c==4~f_i4_s,c==5~f_i5_s),
+    log_slope=case_when(c==1~f_s1_s,c==2~f_s2_s,c==3~f_s3_s,c==4~f_s4_s,c==5~f_s5_s),
+    intercept_g=case_when(c==1~f_i1_g,c==2~f_i2_g,c==3~f_i3_g,c==4~f_i4_g,c==5~f_i5_g),
+    log_slope_g=case_when(c==1~f_s1_g,c==2~f_s2_g,c==3~f_s3_g,c==4~f_s4_g,c==5~f_s5_g),
 
     slope=exp(log_slope),
     slope_g=exp(log_slope_g),
