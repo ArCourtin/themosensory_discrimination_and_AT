@@ -53,10 +53,10 @@ fit_model <- function(iter_info) {
     seed = seed,
     chains = 4,
     parallel_chains = 4,
-    iter_warmup = 1000,
-    iter_sampling = 1000,
+    iter_warmup = 2000,
+    iter_sampling = 2000,
     max_treedepth = 12,
-    adapt_delta = 0.95,
+    adapt_delta = 0.99,
     init=pathfinder_fit,
     refresh = 200
   )
@@ -115,7 +115,7 @@ for(t in 0:1){
       recorded_baseline_temperature = sample_data$baseline,
       absolute_target_temperature   = sample_data$temperature,
       absolute_adapting_temperature = sample_data$adapting,
-      rating                        = sample_data$rating,
+      rating                        = sample_data$rating/100,
       participant                   = sample_data$participant,
       adapting_temperature_idx      = sample_data$adapting_temperature_idx,
       is_cold = t==0
@@ -143,7 +143,7 @@ for (k in seq_along(iter_info)) {
   jobs[[k]] <- slurm_map(
     x = list(iter_info[[k]]),
     f = fit_model,
-    jobname = paste0("stan_", k),
+    jobname = paste0("stan_r_", k),
     cpus_per_node = 4,
     nodes = 1,
     slurm_options = list(time = "24:00:00", mem = "8G"),
