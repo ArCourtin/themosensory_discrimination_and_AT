@@ -21,8 +21,9 @@ inv_logit<-function(x){
 
 baseline<-32
 at_seq<-baseline+(-2:2)
-d<-seq(-13,13,.1)          # discrimination: signed target deviation
-x_rating<-seq(30,45,.1)    # rating: absolute target temperature
+d<-seq(-13,13,.1)                  # discrimination: signed target deviation
+x_rating_cold<-seq(22,32,.1)       # rating: absolute target temperature, cold task
+x_rating_warm<-seq(32,45,.1)       # rating: absolute target temperature, warm task
 
 n_draws<-1000
 thin_draws<-function(df){
@@ -109,27 +110,27 @@ gm_discrimination_non_mechanistic<-function(fit,at_seq,d){
     summarise_theta()
 }
 
-gm_rating_absolute<-function(fit,at_seq,x_grid){
+gm_rating_absolute<-function(fit,at_seq,x_grid,is_cold){
   grid<-expand_grid(x=x_grid,at=at_seq)
   fit$draws('mu',format='df') %>%
     transmute(.draw,intercept=`mu[1]`,slope=exp(`mu[2]`)) %>%
     thin_draws() %>%
     cross_join(grid) %>%
-    mutate(cx=x-baseline,theta=inv_logit(intercept+slope*cx)) %>%
+    mutate(cx=if(is_cold) baseline-x else x-baseline,theta=inv_logit(intercept+slope*cx)) %>%
     summarise_theta()
 }
 
-gm_rating_relative<-function(fit,at_seq,x_grid){
+gm_rating_relative<-function(fit,at_seq,x_grid,is_cold){
   grid<-expand_grid(x=x_grid,at=at_seq)
   fit$draws('mu',format='df') %>%
     transmute(.draw,intercept=`mu[1]`,slope=exp(`mu[2]`)) %>%
     thin_draws() %>%
     cross_join(grid) %>%
-    mutate(cx=x-at,theta=inv_logit(intercept+slope*cx)) %>%
+    mutate(cx=if(is_cold) at-x else x-at,theta=inv_logit(intercept+slope*cx)) %>%
     summarise_theta()
 }
 
-gm_rating_non_mechanistic<-function(fit,at_seq,x_grid){
+gm_rating_non_mechanistic<-function(fit,at_seq,x_grid,is_cold){
   grid<-expand_grid(x=x_grid,at=at_seq)
   fit$draws('mu',format='df') %>%
     transmute(
@@ -144,7 +145,7 @@ gm_rating_non_mechanistic<-function(fit,at_seq,x_grid){
       intercept=case_when(c==1~f_i1,c==2~f_i2,c==3~f_i3,c==4~f_i4,c==5~f_i5),
       log_slope =case_when(c==1~f_s1,c==2~f_s2,c==3~f_s3,c==4~f_s4,c==5~f_s5),
       slope=exp(log_slope),
-      cx=x-at,
+      cx=if(is_cold) at-x else x-at,
       theta=inv_logit(intercept+slope*cx)
     ) %>%
     summarise_theta()
@@ -220,10 +221,13 @@ ribbons %>%
 ggsave('figures/gm_discrimination.png',units='cm',width=18,height=14)
 
 #### Rating: winning model per task, both tasks overlaid (color = task) ####
+task_is_cold<-c(`1`=TRUE,`2`=FALSE)
+x_rating_grid<-list(`1`=x_rating_cold,`2`=x_rating_warm)
+
 rating_curves<-map_dfr(names(task_labels),function(task){
   m<-winning_model_idx("rating",task)
   fit<-readRDS(paste0("results/fits/rating_",m,"_",task,".rds"))
-  gm_functions$rating[[m]](fit,at_seq,x_rating) %>%
+  gm_functions$rating[[m]](fit,at_seq,x_rating_grid[[task]],task_is_cold[[task]]) %>%
     mutate(task=task_labels[[task]])
 })
 
@@ -253,7 +257,7 @@ ribbons %>%
   scale_alpha_manual(labels=c('60% CI','80% CI','90% CI','95% CI'),values=c(.4,.3,.2,.1))+
   scale_fill_manual(values=task_colors,guide='none')+
   scale_color_manual(values=task_colors,guide='none')+
-  scale_x_continuous(breaks=seq(30,45,3))+
+  scale_x_continuous(breaks=seq(22,45,5))+
   scale_y_continuous(breaks=c(0,.5,1))+
   labs(
     alpha='',
