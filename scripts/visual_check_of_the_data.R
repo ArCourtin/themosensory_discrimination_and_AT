@@ -12,7 +12,9 @@ data <-
   mutate(
     relative_adapting_temperature =
       round(adapting - baseline),
-    adapting_temperature_idx = 3 + relative_adapting_temperature
+    adapting_temperature_idx = 3 + relative_adapting_temperature,
+    temperature=temperature*(active_interval-1.5)*2,
+    chose_second  = as.integer(if_else(active_interval == 2, accuracy, 1L - accuracy))
   )
 participant<-unique(data$participant)
 P<-length(participant)
@@ -23,9 +25,10 @@ for(pdx in 1:P){
 #Group level
 data %>% 
   group_by(temperature,adapting_temperature_idx,task) %>%
-  summarise(m=mean(accuracy),n=sum(!is.na(accuracy))) %>% 
+  summarise(m=mean(chose_second),n=sum(!is.na(chose_second))) %>% 
   ggplot(aes(x=temperature,y=m,alpha=n/250))+
     geom_point()+
+    geom_vline(aes(xintercept = 0),linetype='dotted')+
     theme_classic()+
     facet_grid(cols=vars(adapting_temperature_idx),rows=vars(task))
 
@@ -33,17 +36,19 @@ data %>%
 data %>% 
   filter(participant<10) %>% 
   group_by(temperature,adapting_temperature_idx,task,participant) %>%
-  summarise(m=mean(accuracy),n=sum(!is.na(accuracy))) %>% 
+  summarise(m=mean(chose_second),n=sum(!is.na(chose_second))) %>% 
   ggplot(aes(x=temperature,y=m,alpha=n/30,color=as.factor(task)))+
   geom_point()+
+  geom_vline(aes(xintercept = 0),linetype='dotted')+
   theme_classic()+
   facet_grid(cols=vars(adapting_temperature_idx),rows=vars(participant))
 data %>%
   filter(participant>11) %>%
   group_by(temperature,adapting_temperature_idx,task,participant) %>%
-  summarise(m=mean(accuracy),n=sum(!is.na(accuracy))) %>%
+  summarise(m=mean(chose_second),n=sum(!is.na(chose_second))) %>%
   ggplot(aes(x=temperature,y=m,alpha=n/30,color=as.factor(task)))+
   geom_point()+
+  geom_vline(aes(xintercept = 0),linetype='dotted')+
   theme_classic()+
   facet_grid(cols=vars(adapting_temperature_idx),rows=vars(participant))
 
