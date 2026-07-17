@@ -21,7 +21,8 @@ inv_logit<-function(x){
 
 baseline<-32
 at_seq<-baseline+(-2:2)
-d<-seq(-13,13,.1)                  # discrimination: signed target deviation
+d_cold<-seq(-2,2,.1)               # discrimination: signed target deviation, cold task
+d_warm<-seq(-8,8,.1)               # discrimination: signed target deviation, warm task
 x_rating_cold<-seq(22,32,.1)       # rating: absolute target temperature, cold task
 x_rating_warm<-seq(32,45,.1)       # rating: absolute target temperature, warm task
 
@@ -151,22 +152,24 @@ gm_rating_non_mechanistic<-function(fit,at_seq,x_grid,is_cold){
     summarise_theta()
 }
 
+# Models 1 (absolute, personal-baseline reference) and 2 (absolute, fixed reference) share the
+# same stan model/parameterization - only the data fed to recorded_baseline_temperature differs -
+# so the same group-mean reconstruction function applies to both.
 gm_functions<-list(
-  discrimination=list(gm_discrimination_absolute,gm_discrimination_relative,gm_discrimination_non_mechanistic),
-  rating=list(gm_rating_absolute,gm_rating_relative,gm_rating_non_mechanistic)
+  discrimination=list(gm_discrimination_absolute,gm_discrimination_absolute,gm_discrimination_relative,gm_discrimination_non_mechanistic),
+  rating=list(gm_rating_absolute,gm_rating_absolute,gm_rating_relative,gm_rating_non_mechanistic)
 )
 
 #### Determine the LOO-winning model per domain and task ####
-# results/loo/{domain}_{model}_{task}.rds: model 1=absolute, 2=relative, 3=non-mechanistic;
-# task 1=cold, task 2=warm. results/fits/ mirrors the same naming.
+# results/loo/{domain}_{model}_{task}.rds: model 1=absolute (personal baseline), 2=absolute
+# (fixed reference), 3=relative, 4=non-mechanistic; task 1=cold, task 2=warm. results/fits/
+# mirrors the same naming.
+model_labels<-c("absolute (personal baseline)","absolute (fixed reference)","relative","non-mechanistic")
 winning_model_idx<-function(domain,task){
-  loos<-list(
-    absolute=readRDS(paste0("results/loo/",domain,"_1_",task,".rds")),
-    relative=readRDS(paste0("results/loo/",domain,"_2_",task,".rds")),
-    `non-mechanistic`=readRDS(paste0("results/loo/",domain,"_3_",task,".rds"))
-  )
+  loos<-map(1:4,~readRDS(paste0("results/loo/",domain,"_",.x,"_",task,".rds")))
+  names(loos)<-model_labels
   winner<-rownames(loo_compare(loos))[1]
-  match(winner,c("absolute","relative","non-mechanistic"))
+  match(winner,model_labels)
 }
 
 task_labels<-c(`1`="cd",`2`="wd")
@@ -174,10 +177,12 @@ task_labels<-c(`1`="cd",`2`="wd")
 task_colors<-c(cd='#56B4E9',wd='#E69F00')
 
 #### Discrimination: winning model per task, both tasks overlaid (color = task) ####
+d_grid<-list(`1`=d_cold,`2`=d_warm)
+
 discrimination_curves<-map_dfr(names(task_labels),function(task){
   m<-winning_model_idx("discrimination",task)
   fit<-readRDS(paste0("results/fits/discrimination_",m,"_",task,".rds"))
-  gm_functions$discrimination[[m]](fit,at_seq,d) %>%
+  gm_functions$discrimination[[m]](fit,at_seq,d_grid[[task]]) %>%
     mutate(task=task_labels[[task]])
 })
 
@@ -195,6 +200,11 @@ ribbons %>%
     aes(x=x,y=value,color=task)
   )+
   geom_hline(
+    aes(yintercept=0),
+    linetype='dotted',
+    alpha=.5
+  )+
+  geom_hline(
     aes(yintercept=.5),
     linetype='dotted',
     alpha=.5
@@ -204,11 +214,11 @@ ribbons %>%
     linetype='dotted',
     alpha=.5
   )+
-  geom_vline(aes(xintercept=0),linetype='dotted',alpha=.5)+
+  geom_vline(aes(xintercept=0),linetype='dashed',alpha=.5)+
   scale_alpha_manual(labels=c('60% CI','80% CI','90% CI','95% CI'),values=c(.4,.3,.2,.1))+
   scale_fill_manual(values=task_colors,guide='none')+
   scale_color_manual(values=task_colors,guide='none')+
-  scale_x_continuous(breaks=seq(-12,12,4))+
+  scale_x_continuous(breaks=seq(-8,8,4))+
   scale_y_continuous(breaks=c(0,.5,1))+
   labs(
     alpha='',
