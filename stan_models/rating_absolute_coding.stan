@@ -1,6 +1,7 @@
 //This Stan program implements a hierarchical version of the "no habituation - absolute coding" model of thermosensory magnitude estimation
 //Licence: MIT
 //Author: Arthur S. Courtin
+//Edited with the assistance of Claude Code (Anthropic).
 
 data{
   int N;
@@ -47,7 +48,9 @@ transformed parameters{
     
     latent_representation = intercept[participant] + slope[participant] .* centered_absolute_target_temperature;
   }
-  vector[N] mu_rating = inv_logit(latent_representation);
+  // Clamp away from 0/1: inv_logit rounds to exactly 0 or 1 in double precision once
+  // latent_representation is far enough out, and beta_proportion requires an open (0,1) mu.
+  vector[N] mu_rating = fmin(fmax(inv_logit(latent_representation), 1e-9), 1 - 1e-9);
 }
 model{
   //Priors

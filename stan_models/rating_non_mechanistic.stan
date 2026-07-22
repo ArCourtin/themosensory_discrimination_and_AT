@@ -83,7 +83,9 @@ transformed parameters{
       latent_representation[n] = intercept[adapting_temperature_idx[n],participant[n]] + slope[adapting_temperature_idx[n],participant[n]] .* deviation_from_adapting_temperature[n];
     }
   }
-  vector[N] mu_rating = inv_logit(latent_representation);
+  // Clamp away from 0/1: inv_logit rounds to exactly 0 or 1 in double precision once
+  // latent_representation is far enough out, and beta_proportion requires an open (0,1) mu.
+  vector[N] mu_rating = fmin(fmax(inv_logit(latent_representation), 1e-9), 1 - 1e-9);
 }
 model{
   //Intercept profile: mu[1] is the condition-3 (baseline) level, mu[2:5] are independent chained steps

@@ -7,13 +7,19 @@
 library(tidyverse)
 
 #### Extract discrimination data ####
+# Same filters as the fitting scripts: baseline_flag==0 excludes trials where the pre-trial
+# baseline drifted, deviation_flag==0 excludes trials where the two active-zone thermodes
+# disagreed with each other during plateau. The plotted x-axis uses the recorded (measured)
+# plateau temperature rather than the theoretical/commanded one, signed by which interval held
+# the deviating stimulus.
 data <-
-  read_csv("data/d_at_2ifc.csv")%>%
+  read_csv("data/d_at_2ifc_af.csv")%>%
+  filter(baseline_flag == 0, deviation_flag == 0) %>%
   mutate(
     relative_adapting_temperature =
       round(adapting - baseline),
     adapting_temperature_idx = 3 + relative_adapting_temperature,
-    temperature=temperature*(active_interval-1.5)*2,
+    temperature=abs(recorded_temperature-adapting)*(active_interval-1.5)*2,
     chose_second  = as.integer(if_else(active_interval == 2, accuracy, 1L - accuracy))
   )
 participant<-unique(data$participant)
@@ -54,12 +60,13 @@ data %>%
 
 #### Extract rating data ####
 rating_data <-
-  read_csv("data/d_at_ratings.csv")%>%
-  filter(baseline_flag == 0, confirmed == 1) %>%
+  read_csv("data/d_at_ratings_af.csv")%>%
+  filter(baseline_flag == 0, deviation_flag == 0, confirmed == 1, !is.na(recorded_temperature)) %>%
   mutate(
     relative_adapting_temperature =
       round(adapting - baseline),
     adapting_temperature_idx = 3 + relative_adapting_temperature,
+    temperature = recorded_temperature,
     rating = rating/100
   )
 rating_participant<-unique(rating_data$participant)
