@@ -103,8 +103,8 @@ compiled_models <- lapply(model_paths, function(p) {
 # than 0.2C from its mean, i.e. the assumed 32C reference did not actually hold for that trial;
 # these are excluded before fitting.
 discrimination_data <-
-  read_csv("data/d_at_2ifc.csv")%>%
-  filter(baseline_flag == 0) %>%
+  read_csv("data/d_at_2ifc_af.csv")%>%
+  filter(baseline_flag == 0, deviation_flag==0) %>%
   mutate(
     relative_adapting_temperature =
     round(adapting - baseline),
@@ -119,8 +119,8 @@ for(pdx in seq_along(participant)){
 
 #### Extract data (rating) ####
 rating_data <-
-  read_csv("data/d_at_ratings.csv") %>%
-  filter(baseline_flag == 0, confirmed == 1) %>%
+  read_csv("data/d_at_ratings_af.csv") %>%
+  filter(baseline_flag == 0, deviation_flag==0, confirmed == 1,!is.na(recorded_temperature)) %>%
   mutate(
     relative_adapting_temperature = round(adapting - baseline),
     adapting_temperature_idx = 3 + relative_adapting_temperature
@@ -144,7 +144,7 @@ for(t in 0:1){
       N = nrow(d_sample),
       P = length(unique(d_sample$participant)),
       recorded_baseline_temperature = rep(fixed_reference, nrow(d_sample)),
-      absolute_target_temperature   = d_sample$adapting+t*d_sample$temperature+(t-1)*d_sample$temperature,
+      absolute_target_temperature   = round(d_sample$recorded_temperature,1),
       absolute_adapting_temperature = d_sample$adapting,
       interval_sign                 = d_sample$interval_sign,
       chose_second                  = d_sample$chose_second,
@@ -165,7 +165,7 @@ for(t in 0:1){
       N = nrow(r_sample),
       P = length(unique(r_sample$participant)),
       recorded_baseline_temperature = rep(fixed_reference, nrow(r_sample)),
-      absolute_target_temperature   = r_sample$temperature,
+      absolute_target_temperature   = round(r_sample$recorded_temperature,1),
       rating                        = r_sample$rating/100,
       participant                   = r_sample$participant,
       is_cold = t==0

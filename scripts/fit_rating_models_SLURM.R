@@ -95,8 +95,8 @@ compiled_models <- lapply(model_paths, function(p) {
 # these are excluded before fitting. confirmed==0 marks ratings the participant did not
 # explicitly confirm; these are excluded too.
 data <-
-  read_csv("data/d_at_ratings.csv")%>%
-  filter(baseline_flag == 0, confirmed == 1) %>%
+  read_csv("data/d_at_ratings_af.csv")%>%
+  filter(baseline_flag == 0, deviation_flag==0, confirmed == 1,!is.na(recorded_temperature)) %>%
   mutate(
     relative_adapting_temperature =
     round(adapting - baseline),
@@ -120,7 +120,7 @@ for(t in 0:1){
       N = nrow(sample_data),
       P = length(unique(sample_data$participant)),
       recorded_baseline_temperature = sample_data$baseline,
-      absolute_target_temperature   = sample_data$temperature,
+      absolute_target_temperature   = round(sample_data$recorded_temperature,1),
       absolute_adapting_temperature = sample_data$adapting,
       rating                        = sample_data$rating/100,
       participant                   = sample_data$participant,

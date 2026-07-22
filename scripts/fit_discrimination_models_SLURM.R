@@ -97,8 +97,8 @@ compiled_models <- lapply(model_paths, function(p) {
 # than 0.2C from its mean, i.e. the assumed 32C reference did not actually hold for that trial;
 # these are excluded before fitting.
 data <-
-  read_csv("data/d_at_2ifc.csv")%>%
-  filter(baseline_flag == 0) %>%
+  read_csv("data/d_at_2ifc_af.csv")%>%
+  filter(baseline_flag == 0, deviation_flag==0) %>%
   mutate(
     relative_adapting_temperature =
     round(adapting - baseline),
@@ -124,7 +124,7 @@ for(t in 0:1){
       N = nrow(sample_data),
       P = length(unique(sample_data$participant)),
       recorded_baseline_temperature = sample_data$baseline,
-      absolute_target_temperature   = sample_data$adapting+t*sample_data$temperature+(t-1)*sample_data$temperature,
+      absolute_target_temperature   = round(sample_data$recorded_temperature,1),
       absolute_adapting_temperature = sample_data$adapting,
       interval_sign                 = sample_data$interval_sign,
       chose_second                  = sample_data$chose_second,
