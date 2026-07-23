@@ -9,6 +9,17 @@
 # diff))) that loo_compare itself reports. The participant-clustered SE doesn't assume
 # independence between trials sharing the same participant's hierarchical parameters, which the
 # trial-clustered SE does.
+#
+# Trial counts per participant vary a lot post-exclusion, but not as random per-trial noise: the
+# adaptation response was only saved for round 1, so an entire AT-condition block (~30 trials) is
+# dropped whenever adaptation wasn't complete straight away, participant by participant. A
+# participant left with only 1 surviving block has data from a single AT condition, and the three
+# competing models differ specifically in how they predict behaviour *changes across* AT
+# conditions — with no within-participant AT variation left, such a participant is close to
+# uninformative for distinguishing the models, not just noisier. min_blocks below excludes
+# participants with fewer surviving blocks than that from the win-count/SE, reporting the
+# excluded count for transparency; the full per-participant table (with a block-count column) is
+# still printed for all participants regardless.
 # Author: Arthur S. Courtin
 # License: MIT (see LICENSE file)
 # Written with the assistance of Claude Code (Anthropic).
@@ -18,6 +29,8 @@ library(tidyverse)
 library(loo)
 
 rm(list=ls())
+
+min_blocks <- 2
 
 #### Functions ####
 # results/loo/{domain}_{model}_{task}.rds: model 1=absolute (personal baseline), 2=absolute
@@ -29,13 +42,14 @@ model_labels <- c(
   `4` = "non-mechanistic"
 )
 
-# Reproduces the per-trial participant index feeding the `participant` entry of the Stan data
-# list in fit_discrimination_models_SLURM.R / fit_rating_models_SLURM.R /
-# fit_absolute_fixed_reference_models_SLURM.R (same filters, same renumbering, same row order),
-# so each row of a model's pointwise elpd_loo can be attributed back to a participant.
-# `task_code` here is the saved-filename task suffix (1 = cold, 2 = warm); the raw CSV's own
-# `task` column is coded 0 = cold, 1 = warm (task_code - 1), matching the fitting scripts' `t`.
-load_participant_index <- function(domain, task_code) {
+# Reproduces the per-trial participant index and AT-condition block feeding the `participant` /
+# `adapting_temperature_idx` entries of the Stan data list in fit_discrimination_models_SLURM.R /
+# fit_rating_models_SLURM.R / fit_absolute_fixed_reference_models_SLURM.R (same filters, same
+# renumbering, same row order), so each row of a model's pointwise elpd_loo can be attributed
+# back to a participant and an AT-condition block. `task_code` here is the saved-filename task
+# suffix (1 = cold, 2 = warm); the raw CSV's own `task` column is coded 0 = cold, 1 = warm
+# (task_code - 1), matching the fitting scripts' `t`.
+load_trial_metadata <- function(domain, task_code) {
   if (domain == "discrimination") {
     data <- read_csv("data/d_at_2ifc_af.csv", show_col_types = FALSE) %>%
       filter(baseline_flag == 0, deviation_flag == 0)
@@ -47,7 +61,10 @@ load_participant_index <- function(domain, task_code) {
   for (pdx in seq_along(participant_ids)) {
     data$participant[data$participant == participant_ids[pdx]] <- pdx
   }
-  data %>% filter(task == task_code - 1) %>% pull(participant)
+  data %>%
+    filter(task == task_code - 1) %>%
+    mutate(adapting_temperature_idx = 3 + round(adapting - baseline)) %>%
+    select(participant, adapting_temperature_idx)
 }
 
 load_pointwise_elpd <- function(domain, model, task, n_expected) {
@@ -98,31 +115,55 @@ for (set_name in names(model_sets)) {
   for (domain in domains) {
     for (task_name in names(tasks)) {
       task <- tasks[[task_name]]
-      participant_idx <- load_participant_index(domain, task)
-      n_trial <- length(participant_idx)
+      trial_meta <- load_trial_metadata(domain, task)
+      participant_idx <- trial_meta$participant
+      n_trial <- nrow(trial_meta)
 
       elpd_list <- map(models, ~ load_pointwise_elpd(domain, .x, task, n_trial))
       names(elpd_list) <- model_labels[models]
 
+      participant_ids_sorted <- sort(unique(participant_idx))
+      n_blocks <- as.numeric(tapply(trial_meta$adapting_temperature_idx, participant_idx, n_distinct))
+      n_trials_participant <- as.numeric(table(participant_idx))
       participant_sums <- map_dfc(elpd_list, ~ as.numeric(tapply(.x, participant_idx, sum)))
-      participant_sums <- bind_cols(participant = sort(unique(participant_idx)), participant_sums)
+      participant_sums <- bind_cols(
+        participant = participant_ids_sorted,
+        n_blocks = n_blocks,
+        n_trials = n_trials_participant,
+        participant_sums
+      )
 
       cat("\n####", set_name, "-", domain, "-", task_name, "task ####\n")
-      cat("Per-participant summed elpd_loo by model:\n")
+      cat("Per-participant summed elpd_loo by model (n_blocks = surviving AT-condition blocks, out of 5):\n")
       print(participant_sums)
 
+      elpd_cols <- setdiff(names(participant_sums), c("participant", "n_blocks", "n_trials"))
+      eligible <- participant_sums %>% filter(n_blocks >= min_blocks)
+      n_excluded <- nrow(participant_sums) - nrow(eligible)
+      if (n_excluded > 0) {
+        cat("\n", n_excluded, "participant(s) with fewer than", min_blocks,
+            "surviving blocks excluded from the win-count/SE below (shown above for reference).\n")
+      }
+
       best_model <- apply(
-        as.matrix(select(participant_sums, -participant)), 1,
+        as.matrix(select(eligible, all_of(elpd_cols))), 1,
         function(row) names(row)[which.max(row)]
       )
-      cat("\nParticipants individually best explained by each model:\n")
+      cat("\nParticipants (n_blocks >=", min_blocks, ") individually best explained by each model:\n")
       print(table(best_model))
 
-      pooled_ranking <- sort(colSums(select(participant_sums, -participant)), decreasing = TRUE)
+      pooled_ranking <- sort(colSums(select(eligible, all_of(elpd_cols))), decreasing = TRUE)
       top_two <- names(pooled_ranking)[1:2]
+      keep_trial <- participant_idx %in% eligible$participant
 
-      cat("\nClustered comparison, top two by pooled elpd_loo (", top_two[1], "vs", top_two[2], "):\n")
-      print(compare_pair(elpd_list[[top_two[1]]], elpd_list[[top_two[2]]], participant_idx, top_two[1], top_two[2]))
+      cat("\nClustered comparison (n_blocks >=", min_blocks, "), top two by pooled elpd_loo (",
+          top_two[1], "vs", top_two[2], "):\n")
+      print(compare_pair(
+        elpd_list[[top_two[1]]][keep_trial],
+        elpd_list[[top_two[2]]][keep_trial],
+        participant_idx[keep_trial],
+        top_two[1], top_two[2]
+      ))
     }
   }
 }
