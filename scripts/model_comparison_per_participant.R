@@ -33,6 +33,8 @@ model_labels <- c(
 # list in fit_discrimination_models_SLURM.R / fit_rating_models_SLURM.R /
 # fit_absolute_fixed_reference_models_SLURM.R (same filters, same renumbering, same row order),
 # so each row of a model's pointwise elpd_loo can be attributed back to a participant.
+# `task_code` here is the saved-filename task suffix (1 = cold, 2 = warm); the raw CSV's own
+# `task` column is coded 0 = cold, 1 = warm (task_code - 1), matching the fitting scripts' `t`.
 load_participant_index <- function(domain, task_code) {
   if (domain == "discrimination") {
     data <- read_csv("data/d_at_2ifc_af.csv", show_col_types = FALSE) %>%
@@ -45,7 +47,7 @@ load_participant_index <- function(domain, task_code) {
   for (pdx in seq_along(participant_ids)) {
     data$participant[data$participant == participant_ids[pdx]] <- pdx
   }
-  data %>% filter(task == task_code) %>% pull(participant)
+  data %>% filter(task == task_code - 1) %>% pull(participant)
 }
 
 load_pointwise_elpd <- function(domain, model, task, n_expected) {
