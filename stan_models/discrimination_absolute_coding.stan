@@ -1,8 +1,8 @@
 //This Stan program implements a hierarchical version of the "no habituation - absolute coding" model of thermosensory discrimination
 //Response-coded: the outcome is the second-interval choice of a 2IFC task, not accuracy.
 //Evidence is zero at and below the adapting temperature (adaptation masks the absolute reading up to that
-//point) and equal to the raw absolute (baseline+rho anchored) reading everywhere above it; there is no
-//separate detection-threshold parameter (the threshold is carried by beta) and no explicit comparison of
+//point) and equal to the raw absolute (baseline+xi anchored) reading everywhere above it; the positive hard threshold xi defines the silent range
+//and beta is the precision. There is no explicit comparison of
 //two representations - the adapting temperature only sets where the mask releases.
 //Licence: MIT
 //Author: Arthur S. Courtin
@@ -31,6 +31,14 @@ transformed data{
     centered_absolute_adapting_temperature = absolute_adapting_temperature - recorded_baseline_temperature;
   }
   int M=4;
+
+  // beta and lambda priors come from earlier yes/no thermal detection fits (beta converted to the 2IFC scale by /sqrt(2), with that conversion's uncertainty added in quadrature).
+  real beta_mean = is_cold==1 ? 0.552-30*0.0157-log(sqrt(2)) : -0.786-30*0.00239-log(sqrt(2));
+  real beta_sd = is_cold==1 ? sqrt(1.1^2+log(sqrt(2))^2) : sqrt(0.865^2+log(sqrt(2))^2);
+  real lambda_mean = -3.85+30*0.00171;
+  real lambda_sd = 0.72;
+  real kappa_sd = 0.5;
+  real xi_sd = 0.5;
 }
 parameters{
   vector[M] mu;
@@ -39,7 +47,7 @@ parameters{
   cholesky_factor_corr[M] L;
 }
 transformed parameters{
-  vector[P] rho;
+  vector[P] xi;
   vector[P] beta;
   vector[P] lambda;
   vector[P] kappa;
@@ -48,41 +56,40 @@ transformed parameters{
   {
     matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
 
-    rho = mu[1] + delta_participant[,1];
+    xi = exp(mu[1] + delta_participant[,1]);
     beta = exp(mu[2] + delta_participant[,2]);
     lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
     kappa = mu[4] + delta_participant[,4];
 
     // Absolute coding: the target's warm-channel activation is the soft-rectified distance from the
-    // absolute reference (baseline + rho) - no recentering on the adapting temperature. Adaptation does
+    // absolute reference (baseline + xi) - no recentering on the adapting temperature. Adaptation does
     // not shift this reading; it masks it up to the adapting temperature itself (no free window size),
     // releasing sharply above it. So evidence is ~0 for target readings at or below the adapting
-    // temperature, and ~(target - baseline - rho) above it. When the adapting temperature itself falls
-    // below rho, the mask never engages and the model reduces to pure unmasked absolute coding.
-    vector[N] centered_target = centered_absolute_target_temperature - rho[participant];
+    // temperature, and ~(target - baseline - xi) above it. When the adapting temperature itself falls
+    // below xi, the mask never engages and the model reduces to pure unmasked absolute coding.
+    vector[N] centered_target = centered_absolute_target_temperature - xi[participant];
     vector[N] absolute_reading = centered_target .* inv_logit(100*centered_target);
-    vector[N] mask_gate = inv_logit(100*(absolute_reading - (centered_absolute_adapting_temperature - rho[participant])));
+    vector[N] mask_gate = inv_logit(100*(absolute_reading - (centered_absolute_adapting_temperature - xi[participant])));
     vector[N] stimulus_representation = absolute_reading .* mask_gate;
 
-    theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) - kappa[participant]);
+    theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) + kappa[participant]);
   }
 }
 model{
   //Priors
-  // rho is the absolute floor below which nothing reads as warm, centered at baseline (0): pushing it
-  // well above the tested range would place the floor above every target temperature, flattening the
-  // model to chance performance on every trial.
-  mu[1] ~ normal(0,2);
-  mu[2] ~ normal(0,1);
-  mu[3] ~ normal(-4,1);
-  mu[4] ~ normal(0,1);
+  // xi is the hard threshold defining the silent range: the absolute floor below which nothing reads as warm, positive so the floor
+  // sits above baseline, where the adapted sensation is neutral. The prior keeps it within the tested range.
+  mu[1] ~ normal(-2,xi_sd);
+  mu[2] ~ normal(beta_mean,beta_sd);
+  mu[3] ~ normal(lambda_mean,lambda_sd);
+  mu[4] ~ normal(0,kappa_sd);
 
-  tau[1] ~ normal(0,2);
-  tau[2] ~ normal(0,1);
-  tau[3] ~ normal(0,1);
-  tau[4] ~ normal(0,1);
+  tau[1] ~ normal(0,xi_sd);
+  tau[2] ~ normal(0,beta_sd);
+  tau[3] ~ normal(0,lambda_sd);
+  tau[4] ~ normal(0,kappa_sd);
 
-  L ~ lkj_corr_cholesky(2);
+  L ~ lkj_corr_cholesky(1);
 
   to_vector(z) ~ std_normal();
 

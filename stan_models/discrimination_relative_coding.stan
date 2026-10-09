@@ -1,9 +1,10 @@
 //This Stan program implements a hierarchical version of the "complete habituation - relative coding" model of thermosensory discrimination
 //Response-coded: the outcome is the second-interval choice of a 2IFC task, not accuracy.
-//Evidence is the soft-rectified deviation of the target from the adapting temperature; there is no
-//separate detection-threshold parameter (the threshold is carried by beta).
+//Evidence is the soft-rectified deviation of the target from the adapting temperature, floored at a
+//participant-specific hard threshold xi, which defines the silent range (deviations up to xi yield no evidence).
 //Licence: MIT
 //Author: Arthur S. Courtin
+//Edited with the assistance of Claude Code (Anthropic).
 
 data{
   int N;
@@ -24,7 +25,15 @@ transformed data{
     deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
   }
 
-  int M=3;
+  int M=4;
+
+  // beta and lambda priors come from earlier yes/no thermal detection fits (beta converted to the 2IFC scale by /sqrt(2), with that conversion's uncertainty added in quadrature).
+  real beta_mean = is_cold==1 ? 0.552-30*0.0157-log(sqrt(2)) : -0.786-30*0.00239-log(sqrt(2));
+  real beta_sd = is_cold==1 ? sqrt(1.1^2+log(sqrt(2))^2) : sqrt(0.865^2+log(sqrt(2))^2);
+  real lambda_mean = -3.85+30*0.00171;
+  real lambda_sd = 0.72;
+  real kappa_sd = 0.5;
+  real xi_sd = 0.5;
 }
 parameters{
   vector[M] mu;
@@ -33,6 +42,7 @@ parameters{
   cholesky_factor_corr[M] L;
 }
 transformed parameters{
+  vector[P] xi;
   vector[P] beta;
   vector[P] lambda;
   vector[P] kappa;
@@ -41,29 +51,33 @@ transformed parameters{
   {
     matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
 
-    beta = exp(mu[1] + delta_participant[,1]);
-    lambda = .5 * inv_logit(mu[2] + delta_participant[,2]);
-    kappa = mu[3] + delta_participant[,3];
+    xi = exp(mu[1] + delta_participant[,1]);
+    beta = exp(mu[2] + delta_participant[,2]);
+    lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
+    kappa = mu[4] + delta_participant[,4];
 
     // Relative coding: the representation is referenced to the adapting temperature (complete
     // habituation), so the discrimination evidence is the soft-rectified deviation of the target
-    // from the adapting temperature.
-    vector[N] stimulus_representation = deviation_from_adapting_temperature .* inv_logit(100*deviation_from_adapting_temperature);
+    // from the adapting temperature, beyond the hard threshold xi (the silent range).
+    vector[N] centered_stimulus = deviation_from_adapting_temperature - xi[participant];
+    vector[N] stimulus_representation = centered_stimulus .* inv_logit(100*centered_stimulus);
 
-    theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) - kappa[participant]);
+    theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) + kappa[participant]);
   }
 }
 model{
   //Priors
-  mu[1] ~ normal(0,1);
-  mu[2] ~ normal(-4,1);
-  mu[3] ~ normal(0,1);
+  mu[1] ~ normal(-2,xi_sd);
+  mu[2] ~ normal(beta_mean,beta_sd);
+  mu[3] ~ normal(lambda_mean,lambda_sd);
+  mu[4] ~ normal(0,kappa_sd);
 
-  tau[1] ~ normal(0,1);
-  tau[2] ~ normal(0,1);
-  tau[3] ~ normal(0,1);
+  tau[1] ~ normal(0,xi_sd);
+  tau[2] ~ normal(0,beta_sd);
+  tau[3] ~ normal(0,lambda_sd);
+  tau[4] ~ normal(0,kappa_sd);
 
-  L ~ lkj_corr_cholesky(2);
+  L ~ lkj_corr_cholesky(1);
 
   to_vector(z) ~ std_normal();
 

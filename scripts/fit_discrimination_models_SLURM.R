@@ -1,7 +1,5 @@
 # Script to used to iteratively fit the different models to the different simulated datasets
-# Model indices used for saved filenames: 1=absolute (personal-baseline reference), 3=relative,
-# 4=non-mechanistic. Index 2 (absolute, fixed common reference) is fit separately by
-# fit_absolute_fixed_reference_models_SLURM.R, reusing the same absolute stan model unchanged.
+# Model indices used for saved filenames: 1=absolute, 2=relative, 3=non-mechanistic.
 # Author: Arthur S. Courtin
 # License: MIT (see LICENSE file)
 # Edited with the assistance of Claude Code (Anthropic).
@@ -112,10 +110,7 @@ for(pdx in 1:P){
   data$participant[data$participant==participant[pdx]]<-pdx
 }
 #### Prepare lists for fitting runs ##############
-# model_paths order is (absolute, relative, non-mechanistic); model_save_idx maps that compile
-# order onto the saved-filename index, leaving slot 2 free for the fixed-reference absolute
-# variant fit by fit_absolute_fixed_reference_models_SLURM.R.
-model_save_idx<-c(1,3,4)
+# Model order (absolute, relative, non-mechanistic) is also the saved-filename index.
 iter_info=list()
 for(t in 0:1){
   sample_data<-data %>% filter(task==t)
@@ -136,7 +131,7 @@ for(t in 0:1){
     iter_info[[m+t*3]]<-
       list(
         wd=wd,
-        fitted=model_save_idx[m],
+        fitted=m,
         task=t+1,
         model_path = model_paths[m],
         data_list=data_list
