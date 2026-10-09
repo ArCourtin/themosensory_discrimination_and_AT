@@ -1,9 +1,8 @@
-# Script used to plot the group-mean discrimination/rating psychometric functions of all four
-# fitted models (1=absolute personal-baseline, 2=absolute fixed-reference, 3=relative,
-# 4=non-mechanistic), one figure per domain x model, with cold/warm tasks overlaid (color=task)
+# Script used to plot the group-mean discrimination/rating psychometric functions of all three
+# fitted models (1=absolute, 2=relative, 3=non-mechanistic), one figure per domain x model, with cold/warm tasks overlaid (color=task)
 # across the five adapting temperatures and the raw group-level data plotted underneath. Curve
 # reconstruction math for each stan_models/*.stan file (ribbon/median style, nested-CI-via-alpha)
-# follows plot_winning_models.R, extended here to loop over all four models instead of only the
+# follows plot_winning_models.R, extended here to loop over all three models instead of only the
 # LOO winner.
 # Author: Arthur S. Courtin
 # License: MIT (see LICENSE file)
@@ -56,17 +55,17 @@ summarise_theta<-function(df){
 gm_discrimination_absolute<-function(fit,at_seq,d){
   grid<-expand_grid(x=d,at=at_seq)
   fit$draws('mu',format='df') %>%
-    transmute(.draw,rho=`mu[1]`,beta=exp(`mu[2]`),lambda=.5*inv_logit(`mu[3]`),kappa=`mu[4]`) %>%
+    transmute(.draw,xi=exp(`mu[1]`),beta=exp(`mu[2]`),lambda=.5*inv_logit(`mu[3]`),kappa=`mu[4]`) %>%
     thin_draws() %>%
     cross_join(grid) %>%
     mutate(
       interval_sign=sign(x),
       target=at+abs(x),
-      cx_target=target-nominal_baseline-rho,
+      cx_target=target-nominal_baseline-xi,
       absolute_reading=cx_target*inv_logit(100*cx_target),
-      mask_gate=inv_logit(100*(absolute_reading-(at-nominal_baseline-rho))),
+      mask_gate=inv_logit(100*(absolute_reading-(at-nominal_baseline-xi))),
       stim_rep=absolute_reading*mask_gate,
-      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa)
+      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep+kappa)
     ) %>%
     summarise_theta()
 }
@@ -74,14 +73,14 @@ gm_discrimination_absolute<-function(fit,at_seq,d){
 gm_discrimination_relative<-function(fit,at_seq,d){
   grid<-expand_grid(x=d,at=at_seq)
   fit$draws('mu',format='df') %>%
-    transmute(.draw,beta=exp(`mu[1]`),lambda=.5*inv_logit(`mu[2]`),kappa=`mu[3]`) %>%
+    transmute(.draw,xi=exp(`mu[1]`),beta=exp(`mu[2]`),lambda=.5*inv_logit(`mu[3]`),kappa=`mu[4]`) %>%
     thin_draws() %>%
     cross_join(grid) %>%
     mutate(
       interval_sign=sign(x),
-      cx=abs(x),
+      cx=abs(x)-xi,
       stim_rep=cx*inv_logit(100*cx),
-      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa)
+      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep+kappa)
     ) %>%
     summarise_theta()
 }
@@ -91,7 +90,7 @@ gm_discrimination_non_mechanistic<-function(fit,at_seq,d){
   fit$draws('mu',format='df') %>%
     transmute(
       .draw,
-      f_a3=`mu[1]`, f_a4=f_a3+`mu[2]`, f_a5=f_a4+`mu[3]`, f_a2=f_a3+`mu[4]`, f_a1=f_a2+`mu[5]`,
+      f_x3=`mu[1]`, f_x4=f_x3+`mu[2]`, f_x5=f_x4+`mu[3]`, f_x2=f_x3+`mu[4]`, f_x1=f_x2+`mu[5]`,
       f_b3=`mu[6]`, f_b4=f_b3+`mu[7]`, f_b5=f_b4+`mu[8]`, f_b2=f_b3+`mu[9]`, f_b1=f_b2+`mu[10]`,
       lambda=.5*inv_logit(`mu[11]`),
       kappa=`mu[12]`
@@ -100,14 +99,14 @@ gm_discrimination_non_mechanistic<-function(fit,at_seq,d){
     cross_join(grid) %>%
     mutate(
       c=at-29,
-      log_alpha=case_when(c==1~f_a1,c==2~f_a2,c==3~f_a3,c==4~f_a4,c==5~f_a5),
+      log_xi=case_when(c==1~f_x1,c==2~f_x2,c==3~f_x3,c==4~f_x4,c==5~f_x5),
       log_beta =case_when(c==1~f_b1,c==2~f_b2,c==3~f_b3,c==4~f_b4,c==5~f_b5),
       interval_sign=sign(x),
-      alpha=exp(log_alpha),
+      xi=exp(log_xi),
       beta=exp(log_beta),
-      cx=abs(x)-alpha,
+      cx=abs(x)-xi,
       stim_rep=cx*inv_logit(100*cx),
-      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa)
+      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep+kappa)
     ) %>%
     summarise_theta()
 }
@@ -153,14 +152,11 @@ gm_rating_non_mechanistic<-function(fit,at_seq,x_grid,is_cold){
     summarise_theta()
 }
 
-# Models 1 (absolute, personal-baseline reference) and 2 (absolute, fixed reference) share the
-# same stan model/parameterization - only the data fed to recorded_baseline_temperature differs -
-# so the same group-mean reconstruction function applies to both.
 gm_functions<-list(
-  discrimination=list(gm_discrimination_absolute,gm_discrimination_absolute,gm_discrimination_relative,gm_discrimination_non_mechanistic),
-  rating=list(gm_rating_absolute,gm_rating_absolute,gm_rating_relative,gm_rating_non_mechanistic)
+  discrimination=list(`1`=gm_discrimination_absolute,`2`=gm_discrimination_relative,`3`=gm_discrimination_non_mechanistic),
+  rating=list(`1`=gm_rating_absolute,`2`=gm_rating_relative,`3`=gm_rating_non_mechanistic)
 )
-model_labels<-c(`1`="absolute (personal baseline)",`2`="absolute (fixed reference)",`3`="relative",`4`="non-mechanistic")
+model_labels<-c(`1`="absolute",`2`="relative",`3`="non-mechanistic")
 
 task_labels<-c(`1`="cd",`2`="wd")
 task_colors<-c(cd='#56B4E9',wd='#E69F00')
@@ -199,13 +195,13 @@ raw_rating<-
     task=task_labels[as.character(task_file_idx)]
   )
 
-#### Discrimination: all four models, both tasks overlaid (color = task) ####
+#### Discrimination: all three models, both tasks overlaid (color = task) ####
 d_grid<-list(`1`=d_cold,`2`=d_warm)
 
-for(m in 1:4){
+for(m in 1:3){
   curves<-map_dfr(names(task_labels),function(task){
     fit<-readRDS(paste0("results/fits/discrimination_",m,"_",task,".rds"))
-    gm_functions$discrimination[[m]](fit,at_seq,d_grid[[task]]) %>%
+    gm_functions$discrimination[[as.character(m)]](fit,at_seq,d_grid[[task]]) %>%
       mutate(task=task_labels[[task]])
   })
 
@@ -240,14 +236,14 @@ for(m in 1:4){
   ggsave(paste0('figures/gm_discrimination_',m,'.png'),plot=p,units='cm',width=18,height=14)
 }
 
-#### Rating: all four models, both tasks overlaid (color = task) ####
+#### Rating: all three models, both tasks overlaid (color = task) ####
 task_is_cold<-c(`1`=TRUE,`2`=FALSE)
 x_rating_grid<-list(`1`=x_rating_cold,`2`=x_rating_warm)
 
-for(m in 1:4){
+for(m in 1:3){
   curves<-map_dfr(names(task_labels),function(task){
     fit<-readRDS(paste0("results/fits/rating_",m,"_",task,".rds"))
-    gm_functions$rating[[m]](fit,at_seq,x_rating_grid[[task]],task_is_cold[[task]]) %>%
+    gm_functions$rating[[as.character(m)]](fit,at_seq,x_rating_grid[[task]],task_is_cold[[task]]) %>%
       mutate(task=task_labels[[task]])
   })
 

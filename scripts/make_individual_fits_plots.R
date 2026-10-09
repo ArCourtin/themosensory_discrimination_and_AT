@@ -3,13 +3,14 @@
 # participant (rows) and adapting-temperature condition (columns). Unlike make_gm_plots.R (which
 # reconstructs the group-mean curve with credible ribbons from posterior `mu` draws), this script
 # reconstructs one point-estimate curve per participant from the posterior median of each
-# participant's own transformed parameters (e.g. `rho[p]`, `beta[p]`) - no ribbons, since raw
+# participant's own transformed parameters (e.g. `xi[p]`, `beta[p]`) - no ribbons, since raw
 # per-participant data is too sparse for a per-draw uncertainty band to be informative here.
 # Curve reconstruction math for each stan_models/*.stan file otherwise follows the same formulas
 # as make_gm_plots.R / plot_winning_models.R, indexed by participant instead of by draw. The
 # absolute model's individual curves use each participant's own recorded pre-session baseline
-# temperature (model 1) or the fixed common reference of 32 (model 2), matching what each model
-# was actually fit with, rather than the nominal baseline used for the group-mean grid.
+# temperature, matching what the model was actually fit with, rather than the nominal baseline
+# used for the group-mean grid.
+# Edited with the assistance of Claude Code (Anthropic).
 # Author: Arthur S. Courtin
 # License: MIT (see LICENSE file)
 # Written with the assistance of Claude Code (Anthropic).
@@ -32,11 +33,11 @@ d_warm<-seq(-8,8,.1)               # discrimination: signed target deviation, wa
 x_rating_cold<-seq(22,32,.1)       # rating: absolute target temperature, cold task
 x_rating_warm<-seq(32,45,.1)       # rating: absolute target temperature, warm task
 
-model_labels<-c(`1`="absolute (personal baseline)",`2`="absolute (fixed reference)",`3`="relative",`4`="non-mechanistic")
+model_labels<-c(`1`="absolute",`2`="relative",`3`="non-mechanistic")
 task_labels<-c(`1`="cd",`2`="wd")
 
 #### Per-participant parameter extraction from posterior medians ####
-# Vector[P] transformed parameters (e.g. rho[p], beta[p]) - one row per participant per variable.
+# Vector[P] transformed parameters (e.g. xi[p], beta[p]) - one row per participant per variable.
 ind_params_vecP<-function(fit,vars){
   fit$summary(vars) %>%
     transmute(
@@ -47,7 +48,7 @@ ind_params_vecP<-function(fit,vars){
     pivot_wider(names_from=base,values_from=median)
 }
 
-# Matrix[C,P] transformed parameters (e.g. alpha[c,p]) - one row per (condition, participant) per variable.
+# Matrix[C,P] transformed parameters (e.g. xi[c,p]) - one row per (condition, participant) per variable.
 ind_params_matCP<-function(fit,vars){
   fit$summary(vars) %>%
     mutate(
@@ -61,51 +62,50 @@ ind_params_matCP<-function(fit,vars){
 
 #### Individual-curve reconstruction, one function per stan_models/*.stan file ####
 # participant_baseline (only used by the absolute model) is a df(participant,baseline_i) giving
-# each participant's own reference temperature - their recorded pre-session baseline for model 1,
-# a fixed 32 for model 2. The unused argument is kept in the other models' signatures so all four
-# can be called uniformly from the same loop.
+# each participant's own recorded pre-session baseline. The unused argument is kept in the other
+# models' signatures so all three can be called uniformly from the same loop.
 ind_discrimination_absolute<-function(fit,at_seq,d,participant_baseline){
   grid<-expand_grid(x=d,at=at_seq)
-  ind_params_vecP(fit,c('rho','beta','lambda','kappa')) %>%
+  ind_params_vecP(fit,c('xi','beta','lambda','kappa')) %>%
     left_join(participant_baseline,by='participant') %>%
     cross_join(grid) %>%
     mutate(
       interval_sign=sign(x),
       target=at+abs(x),
-      cx_target=target-baseline_i-rho,
+      cx_target=target-baseline_i-xi,
       absolute_reading=cx_target*inv_logit(100*cx_target),
-      mask_gate=inv_logit(100*(absolute_reading-(at-baseline_i-rho))),
+      mask_gate=inv_logit(100*(absolute_reading-(at-baseline_i-xi))),
       stim_rep=absolute_reading*mask_gate,
-      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa)
+      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep+kappa)
     ) %>%
     select(participant,at,x,theta)
 }
 
 ind_discrimination_relative<-function(fit,at_seq,d,participant_baseline=NULL){
   grid<-expand_grid(x=d,at=at_seq)
-  ind_params_vecP(fit,c('beta','lambda','kappa')) %>%
+  ind_params_vecP(fit,c('xi','beta','lambda','kappa')) %>%
     cross_join(grid) %>%
     mutate(
       interval_sign=sign(x),
-      cx=abs(x),
+      cx=abs(x)-xi,
       stim_rep=cx*inv_logit(100*cx),
-      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa)
+      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep+kappa)
     ) %>%
     select(participant,at,x,theta)
 }
 
 ind_discrimination_non_mechanistic<-function(fit,at_seq,d,participant_baseline=NULL){
   grid<-expand_grid(x=d,at=at_seq) %>% mutate(c=at-29)
-  ab<-ind_params_matCP(fit,c('alpha','beta'))
+  ab<-ind_params_matCP(fit,c('xi','beta'))
   lk<-ind_params_vecP(fit,c('lambda','kappa'))
   ab %>%
     inner_join(grid,by='c') %>%
     left_join(lk,by='participant') %>%
     mutate(
       interval_sign=sign(x),
-      cx=abs(x)-alpha,
+      cx=abs(x)-xi,
       stim_rep=cx*inv_logit(100*cx),
-      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep-kappa)
+      theta=lambda+(1-2*lambda)*pnorm(interval_sign*beta*stim_rep+kappa)
     ) %>%
     select(participant,at,x,theta)
 }
@@ -136,8 +136,8 @@ ind_rating_non_mechanistic<-function(fit,at_seq,x_grid,is_cold,participant_basel
 }
 
 ind_functions<-list(
-  discrimination=list(ind_discrimination_absolute,ind_discrimination_absolute,ind_discrimination_relative,ind_discrimination_non_mechanistic),
-  rating=list(ind_rating_absolute,ind_rating_absolute,ind_rating_relative,ind_rating_non_mechanistic)
+  discrimination=list(`1`=ind_discrimination_absolute,`2`=ind_discrimination_relative,`3`=ind_discrimination_non_mechanistic),
+  rating=list(`1`=ind_rating_absolute,`2`=ind_rating_relative,`3`=ind_rating_non_mechanistic)
 )
 
 fig_height<-function(P){ max(10,2.2*P) }
@@ -166,8 +166,7 @@ for(task in names(task_labels)){
   P<-n_distinct(sample_data$participant)
 
   personal_baseline_df<-sample_data %>% distinct(participant,baseline) %>% rename(baseline_i=baseline)
-  fixed_baseline_df<-personal_baseline_df %>% mutate(baseline_i=nominal_baseline)
-  baseline_by_model<-list(`1`=personal_baseline_df,`2`=fixed_baseline_df,`3`=NULL,`4`=NULL)
+  baseline_by_model<-list(`1`=personal_baseline_df,`2`=NULL,`3`=NULL)
 
   raw_ind<-sample_data %>%
     mutate(
@@ -177,9 +176,9 @@ for(task in names(task_labels)){
     group_by(participant,at,x) %>%
     summarise(m=mean(chose_second),n=sum(!is.na(chose_second)),.groups="drop")
 
-  for(m in 1:4){
+  for(m in 1:3){
     fit<-readRDS(paste0("results/fits/discrimination_",m,"_",task,".rds"))
-    curves<-ind_functions$discrimination[[m]](fit,at_seq,d_grid[[task]],baseline_by_model[[as.character(m)]])
+    curves<-ind_functions$discrimination[[as.character(m)]](fit,at_seq,d_grid[[task]],baseline_by_model[[as.character(m)]])
 
     p<-curves %>%
       ggplot()+
@@ -227,8 +226,7 @@ for(task in names(task_labels)){
   P<-n_distinct(sample_data$participant)
 
   personal_baseline_df<-sample_data %>% distinct(participant,baseline) %>% rename(baseline_i=baseline)
-  fixed_baseline_df<-personal_baseline_df %>% mutate(baseline_i=nominal_baseline)
-  baseline_by_model<-list(`1`=personal_baseline_df,`2`=fixed_baseline_df,`3`=NULL,`4`=NULL)
+  baseline_by_model<-list(`1`=personal_baseline_df,`2`=NULL,`3`=NULL)
 
   raw_ind<-sample_data %>%
     mutate(
@@ -237,9 +235,9 @@ for(task in names(task_labels)){
       rating=rating/100
     )
 
-  for(m in 1:4){
+  for(m in 1:3){
     fit<-readRDS(paste0("results/fits/rating_",m,"_",task,".rds"))
-    curves<-ind_functions$rating[[m]](fit,at_seq,x_rating_grid[[task]],task_is_cold[[task]],baseline_by_model[[as.character(m)]])
+    curves<-ind_functions$rating[[as.character(m)]](fit,at_seq,x_rating_grid[[task]],task_is_cold[[task]],baseline_by_model[[as.character(m)]])
 
     p<-curves %>%
       ggplot()+
