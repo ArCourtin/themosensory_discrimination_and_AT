@@ -66,9 +66,11 @@ ind_params_matCP<-function(fit,vars){
 # models' signatures so all three can be called uniformly from the same loop.
 ind_discrimination_absolute<-function(fit,at_seq,d,participant_baseline){
   grid<-expand_grid(x=d,at=at_seq)
-  ind_params_vecP(fit,c('xi','beta','lambda','kappa')) %>%
+  ind_params_vecP(fit,c('xi','beta')) %>%
     left_join(participant_baseline,by='participant') %>%
     cross_join(grid) %>%
+    mutate(c=at-29) %>%
+    left_join(ind_params_matCP(fit,c('lambda','kappa')),by=c('participant','c')) %>%
     mutate(
       interval_sign=sign(x),
       target=at+abs(x),
@@ -83,8 +85,10 @@ ind_discrimination_absolute<-function(fit,at_seq,d,participant_baseline){
 
 ind_discrimination_relative<-function(fit,at_seq,d,participant_baseline=NULL){
   grid<-expand_grid(x=d,at=at_seq)
-  ind_params_vecP(fit,c('xi','beta','lambda','kappa')) %>%
+  ind_params_vecP(fit,c('xi','beta')) %>%
     cross_join(grid) %>%
+    mutate(c=at-29) %>%
+    left_join(ind_params_matCP(fit,c('lambda','kappa')),by=c('participant','c')) %>%
     mutate(
       interval_sign=sign(x),
       cx=abs(x)-xi,
@@ -96,11 +100,8 @@ ind_discrimination_relative<-function(fit,at_seq,d,participant_baseline=NULL){
 
 ind_discrimination_non_mechanistic<-function(fit,at_seq,d,participant_baseline=NULL){
   grid<-expand_grid(x=d,at=at_seq) %>% mutate(c=at-29)
-  ab<-ind_params_matCP(fit,c('xi','beta'))
-  lk<-ind_params_vecP(fit,c('lambda','kappa'))
-  ab %>%
+  ind_params_matCP(fit,c('xi','beta','lambda','kappa')) %>%
     inner_join(grid,by='c') %>%
-    left_join(lk,by='participant') %>%
     mutate(
       interval_sign=sign(x),
       cx=abs(x)-xi,

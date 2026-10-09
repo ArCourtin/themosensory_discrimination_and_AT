@@ -10,6 +10,30 @@ inv_logit<-function(x){
   return(y)
 }
 
+# Selects, row by row, the value of the condition-specific profile for condition c (1..5).
+pick_condition<-function(c,f1,f2,f3,f4,f5){
+  case_when(c==1~f1,c==2~f2,c==3~f3,c==4~f4,c==5~f5)
+}
+
+# Adds prior draws of a chained AT profile (level at condition 3, independent outward steps to
+# conditions 4/5 and 2/1; matches the chain in stan_models/discrimination_*.stan) as columns
+# <prefix>_g1..5 (group level) and <prefix>_s1..5 (one participant, independent noise per step).
+add_chain_prior<-function(df,prefix,anchor_mean,anchor_sd,tau_sd){
+  n<-nrow(df)
+  chain<-function(v){
+    f<-matrix(NA_real_,n,5)
+    f[,3]<-v[,1]; f[,4]<-f[,3]+v[,2]; f[,5]<-f[,4]+v[,3]; f[,2]<-f[,3]+v[,4]; f[,1]<-f[,2]+v[,5]
+    f
+  }
+  m<-cbind(rnorm(n,anchor_mean,anchor_sd),matrix(rnorm(4*n,0,anchor_sd/2),n,4))
+  dev<-matrix(rnorm(5*n),n,5)*matrix(abs(rnorm(5*n,0,tau_sd)),n,5)
+  g<-chain(m)
+  s<-chain(m+dev)
+  colnames(g)<-paste0(prefix,'_g',1:5)
+  colnames(s)<-paste0(prefix,'_s',1:5)
+  bind_cols(df,as_tibble(g),as_tibble(s))
+}
+
 M=10^3
 idx=1:M
 at=30:34
@@ -40,20 +64,21 @@ for(task in names(task_colors)){
     mutate(
       mu_log_xi=rnorm(1,-2,0.5),
       mu_log_beta=rnorm(1,beta_mean,beta_sd),
-      mu_logit_lambda=rnorm(1,-3.85+30*0.00171,0.72),
       tau_log_xi=abs(rnorm(1,0,0.5)),
       tau_log_beta=abs(rnorm(1,0,beta_sd)),
-      tau_logit_lambda=abs(rnorm(1,0,0.72)),
       xi=exp(rnorm(1,mu_log_xi,tau_log_xi)),
-      beta=exp(rnorm(1,mu_log_beta,tau_log_beta)),
-      lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
-      mu_kappa=rnorm(1,0,0.5),
-      tau_kappa=abs(rnorm(1,0,0.5)),
-      kappa=rnorm(1,mu_kappa,tau_kappa)
+      beta=exp(rnorm(1,mu_log_beta,tau_log_beta))
     ) %>%
     ungroup() %>%
+    add_chain_prior('lam',-3.85+30*0.00171,0.72,0.72) %>%
+    add_chain_prior('kap',0,0.5,0.5) %>%
     full_join(grid_d) %>%
     mutate(
+      c=at-29,
+      lambda=.5*inv_logit(pick_condition(c,lam_s1,lam_s2,lam_s3,lam_s4,lam_s5)),
+      kappa=pick_condition(c,kap_s1,kap_s2,kap_s3,kap_s4,kap_s5),
+      lambda_g=.5*inv_logit(pick_condition(c,lam_g1,lam_g2,lam_g3,lam_g4,lam_g5)),
+      kappa_g=pick_condition(c,kap_g1,kap_g2,kap_g3,kap_g4,kap_g5),
       # Evidence is zero at and below the adapting temperature and equal to the raw absolute
       # (baseline+xi anchored) reading above it - no separate detection threshold (matches
       # discrimination_absolute_coding.stan).
@@ -69,7 +94,7 @@ for(task in names(task_colors)){
       absolute_reading_g=cx_target_g*inv_logit(cx_target_g*100),
       mask_gate_g=inv_logit(100*(absolute_reading_g-(at-32-exp(mu_log_xi)))),
       stim_rep_g=absolute_reading_g*mask_gate_g,
-      theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g+mu_kappa)
+      theta_g=lambda_g+(1-2*lambda_g)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g+kappa_g)
       ) %>%
     group_by(at,x) %>% 
     summarise(
@@ -154,20 +179,21 @@ for(task in names(task_colors)){
     mutate(
       mu_log_xi=rnorm(1,-2,0.5),
       mu_log_beta=rnorm(1,beta_mean,beta_sd),
-      mu_logit_lambda=rnorm(1,-3.85+30*0.00171,0.72),
       tau_log_xi=abs(rnorm(1,0,0.5)),
       tau_log_beta=abs(rnorm(1,0,beta_sd)),
-      tau_logit_lambda=abs(rnorm(1,0,0.72)),
       xi=exp(rnorm(1,mu_log_xi,tau_log_xi)),
-      beta=exp(rnorm(1,mu_log_beta,tau_log_beta)),
-      lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
-      mu_kappa=rnorm(1,0,0.5),
-      tau_kappa=abs(rnorm(1,0,0.5)),
-      kappa=rnorm(1,mu_kappa,tau_kappa)
+      beta=exp(rnorm(1,mu_log_beta,tau_log_beta))
     ) %>%
     ungroup() %>%
+    add_chain_prior('lam',-3.85+30*0.00171,0.72,0.72) %>%
+    add_chain_prior('kap',0,0.5,0.5) %>%
     full_join(grid_d) %>%
     mutate(
+      c=at-29,
+      lambda=.5*inv_logit(pick_condition(c,lam_s1,lam_s2,lam_s3,lam_s4,lam_s5)),
+      kappa=pick_condition(c,kap_s1,kap_s2,kap_s3,kap_s4,kap_s5),
+      lambda_g=.5*inv_logit(pick_condition(c,lam_g1,lam_g2,lam_g3,lam_g4,lam_g5)),
+      kappa_g=pick_condition(c,kap_g1,kap_g2,kap_g3,kap_g4,kap_g5),
       # Evidence is the soft-rectified deviation from the adapting temperature beyond the
       # hard threshold xi, i.e. the silent range (matches discrimination_relative_coding.stan).
       interval_sign=sign(x),
@@ -177,7 +203,7 @@ for(task in names(task_colors)){
 
       cx_g=abs(x)-exp(mu_log_xi),
       stim_rep_g=cx_g*inv_logit(cx_g*100),
-      theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g+mu_kappa)
+      theta_g=lambda_g+(1-2*lambda_g)*pnorm(interval_sign*exp(mu_log_beta)*stim_rep_g+kappa_g)
     ) %>%
     group_by(at,x) %>% 
     summarise(
@@ -262,19 +288,15 @@ for(task in names(task_colors)){
     mutate(
       # Xi profile: mu1 is the level at condition 3 (AT=baseline), mu2/mu3 the independent outward
       # steps toward conditions 4/5, mu4/mu5 the outward steps toward conditions 2/1 (matches
-      # discrimination_non_mechanistic.stan).
+      # discrimination_non_mechanistic.stan). Each step's prior SD is half the SD of its profile's level prior.
       mu1=rnorm(1,-2,0.5),
-      mu2=rnorm(1,0,0.5),mu3=rnorm(1,0,0.5),mu4=rnorm(1,0,0.5),mu5=rnorm(1,0,0.5),
+      mu2=rnorm(1,0,0.25),mu3=rnorm(1,0,0.25),mu4=rnorm(1,0,0.25),mu5=rnorm(1,0,0.25),
       # Beta profile: same chained construction, mu6 the condition-3 level
       mu6=rnorm(1,beta_mean,beta_sd),
-      mu7=rnorm(1,0,0.5),mu8=rnorm(1,0,0.5),mu9=rnorm(1,0,0.5),mu10=rnorm(1,0,0.5),
-      mu_logit_lambda=rnorm(1,-3.85+30*0.00171,0.72),
-      mu_kappa=rnorm(1,0,0.5),
+      mu7=rnorm(1,0,beta_sd/2),mu8=rnorm(1,0,beta_sd/2),mu9=rnorm(1,0,beta_sd/2),mu10=rnorm(1,0,beta_sd/2),
       # participant-level SDs, one per mu entry (tau ~ half-normal(0,1))
       tau1=abs(rnorm(1,0,0.5)),tau2=abs(rnorm(1,0,0.5)),tau3=abs(rnorm(1,0,0.5)),tau4=abs(rnorm(1,0,0.5)),tau5=abs(rnorm(1,0,0.5)),
       tau6=abs(rnorm(1,0,beta_sd)),tau7=abs(rnorm(1,0,beta_sd)),tau8=abs(rnorm(1,0,beta_sd)),tau9=abs(rnorm(1,0,beta_sd)),tau10=abs(rnorm(1,0,beta_sd)),
-      tau_logit_lambda=abs(rnorm(1,0,0.72)),
-      tau_kappa=abs(rnorm(1,0,0.5)),
       # group-level chained profiles (log scale of xi/beta)
       f_x3_g=mu1, f_x4_g=f_x3_g+mu2, f_x5_g=f_x4_g+mu3, f_x2_g=f_x3_g+mu4, f_x1_g=f_x2_g+mu5,
       f_b3_g=mu6, f_b4_g=f_b3_g+mu7, f_b5_g=f_b4_g+mu8, f_b2_g=f_b3_g+mu9, f_b1_g=f_b2_g+mu10,
@@ -282,14 +304,18 @@ for(task in names(task_colors)){
       f_x3_s=mu1+rnorm(1,0,tau1), f_x4_s=f_x3_s+mu2+rnorm(1,0,tau2), f_x5_s=f_x4_s+mu3+rnorm(1,0,tau3),
       f_x2_s=f_x3_s+mu4+rnorm(1,0,tau4), f_x1_s=f_x2_s+mu5+rnorm(1,0,tau5),
       f_b3_s=mu6+rnorm(1,0,tau6), f_b4_s=f_b3_s+mu7+rnorm(1,0,tau7), f_b5_s=f_b4_s+mu8+rnorm(1,0,tau8),
-      f_b2_s=f_b3_s+mu9+rnorm(1,0,tau9), f_b1_s=f_b2_s+mu10+rnorm(1,0,tau10),
-      lambda=inv_logit(rnorm(1,mu_logit_lambda,tau_logit_lambda))/2,
-      kappa=rnorm(1,mu_kappa,tau_kappa)
+      f_b2_s=f_b3_s+mu9+rnorm(1,0,tau9), f_b1_s=f_b2_s+mu10+rnorm(1,0,tau10)
     ) %>%
     ungroup() %>%
+    add_chain_prior('lam',-3.85+30*0.00171,0.72,0.72) %>%
+    add_chain_prior('kap',0,0.5,0.5) %>%
     full_join(grid_d) %>%
     mutate(
       c=at-29,
+      lambda=.5*inv_logit(pick_condition(c,lam_s1,lam_s2,lam_s3,lam_s4,lam_s5)),
+      kappa=pick_condition(c,kap_s1,kap_s2,kap_s3,kap_s4,kap_s5),
+      lambda_g=.5*inv_logit(pick_condition(c,lam_g1,lam_g2,lam_g3,lam_g4,lam_g5)),
+      kappa_g=pick_condition(c,kap_g1,kap_g2,kap_g3,kap_g4,kap_g5),
       log_xi_s=case_when(c==1~f_x1_s,c==2~f_x2_s,c==3~f_x3_s,c==4~f_x4_s,c==5~f_x5_s),
       log_beta_s =case_when(c==1~f_b1_s,c==2~f_b2_s,c==3~f_b3_s,c==4~f_b4_s,c==5~f_b5_s),
       log_xi_g=case_when(c==1~f_x1_g,c==2~f_x2_g,c==3~f_x3_g,c==4~f_x4_g,c==5~f_x5_g),
@@ -306,7 +332,7 @@ for(task in names(task_colors)){
       beta_g=exp(log_beta_g),
       cx_g=abs(x)-xi_g,
       stim_rep_g=cx_g*inv_logit(cx_g*100),
-      theta_g=inv_logit(mu_logit_lambda)/2+(1-2*inv_logit(mu_logit_lambda)/2)*pnorm(interval_sign*beta_g*stim_rep_g+mu_kappa)
+      theta_g=lambda_g+(1-2*lambda_g)*pnorm(interval_sign*beta_g*stim_rep_g+kappa_g)
     ) %>%
     group_by(at,x) %>% 
     summarise(

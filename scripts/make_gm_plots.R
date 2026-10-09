@@ -19,6 +19,11 @@ inv_logit<-function(x){
   return(y)
 }
 
+# Selects, row by row, the value of the condition-specific profile for condition c (1..5).
+pick_condition<-function(c,f1,f2,f3,f4,f5){
+  case_when(c==1~f1,c==2~f2,c==3~f3,c==4~f4,c==5~f5)
+}
+
 nominal_baseline<-32
 at_seq<-nominal_baseline+(-2:2)
 d_cold<-seq(-2,2,.1)               # discrimination: signed target deviation, cold task
@@ -55,10 +60,17 @@ summarise_theta<-function(df){
 gm_discrimination_absolute<-function(fit,at_seq,d){
   grid<-expand_grid(x=d,at=at_seq)
   fit$draws('mu',format='df') %>%
-    transmute(.draw,xi=exp(`mu[1]`),beta=exp(`mu[2]`),lambda=.5*inv_logit(`mu[3]`),kappa=`mu[4]`) %>%
+    transmute(
+      .draw,xi=exp(`mu[1]`),beta=exp(`mu[2]`),
+      f_l3=`mu[3]`, f_l4=f_l3+`mu[4]`, f_l5=f_l4+`mu[5]`, f_l2=f_l3+`mu[6]`, f_l1=f_l2+`mu[7]`,
+      f_k3=`mu[8]`, f_k4=f_k3+`mu[9]`, f_k5=f_k4+`mu[10]`, f_k2=f_k3+`mu[11]`, f_k1=f_k2+`mu[12]`
+    ) %>%
     thin_draws() %>%
     cross_join(grid) %>%
     mutate(
+      c=at-29,
+      lambda=.5*inv_logit(pick_condition(c,f_l1,f_l2,f_l3,f_l4,f_l5)),
+      kappa=pick_condition(c,f_k1,f_k2,f_k3,f_k4,f_k5),
       interval_sign=sign(x),
       target=at+abs(x),
       cx_target=target-nominal_baseline-xi,
@@ -73,10 +85,17 @@ gm_discrimination_absolute<-function(fit,at_seq,d){
 gm_discrimination_relative<-function(fit,at_seq,d){
   grid<-expand_grid(x=d,at=at_seq)
   fit$draws('mu',format='df') %>%
-    transmute(.draw,xi=exp(`mu[1]`),beta=exp(`mu[2]`),lambda=.5*inv_logit(`mu[3]`),kappa=`mu[4]`) %>%
+    transmute(
+      .draw,xi=exp(`mu[1]`),beta=exp(`mu[2]`),
+      f_l3=`mu[3]`, f_l4=f_l3+`mu[4]`, f_l5=f_l4+`mu[5]`, f_l2=f_l3+`mu[6]`, f_l1=f_l2+`mu[7]`,
+      f_k3=`mu[8]`, f_k4=f_k3+`mu[9]`, f_k5=f_k4+`mu[10]`, f_k2=f_k3+`mu[11]`, f_k1=f_k2+`mu[12]`
+    ) %>%
     thin_draws() %>%
     cross_join(grid) %>%
     mutate(
+      c=at-29,
+      lambda=.5*inv_logit(pick_condition(c,f_l1,f_l2,f_l3,f_l4,f_l5)),
+      kappa=pick_condition(c,f_k1,f_k2,f_k3,f_k4,f_k5),
       interval_sign=sign(x),
       cx=abs(x)-xi,
       stim_rep=cx*inv_logit(100*cx),
@@ -92,8 +111,8 @@ gm_discrimination_non_mechanistic<-function(fit,at_seq,d){
       .draw,
       f_x3=`mu[1]`, f_x4=f_x3+`mu[2]`, f_x5=f_x4+`mu[3]`, f_x2=f_x3+`mu[4]`, f_x1=f_x2+`mu[5]`,
       f_b3=`mu[6]`, f_b4=f_b3+`mu[7]`, f_b5=f_b4+`mu[8]`, f_b2=f_b3+`mu[9]`, f_b1=f_b2+`mu[10]`,
-      lambda=.5*inv_logit(`mu[11]`),
-      kappa=`mu[12]`
+      f_l3=`mu[11]`, f_l4=f_l3+`mu[12]`, f_l5=f_l4+`mu[13]`, f_l2=f_l3+`mu[14]`, f_l1=f_l2+`mu[15]`,
+      f_k3=`mu[16]`, f_k4=f_k3+`mu[17]`, f_k5=f_k4+`mu[18]`, f_k2=f_k3+`mu[19]`, f_k1=f_k2+`mu[20]`
     ) %>%
     thin_draws() %>%
     cross_join(grid) %>%
@@ -101,6 +120,8 @@ gm_discrimination_non_mechanistic<-function(fit,at_seq,d){
       c=at-29,
       log_xi=case_when(c==1~f_x1,c==2~f_x2,c==3~f_x3,c==4~f_x4,c==5~f_x5),
       log_beta =case_when(c==1~f_b1,c==2~f_b2,c==3~f_b3,c==4~f_b4,c==5~f_b5),
+      lambda=.5*inv_logit(pick_condition(c,f_l1,f_l2,f_l3,f_l4,f_l5)),
+      kappa=pick_condition(c,f_k1,f_k2,f_k3,f_k4,f_k5),
       interval_sign=sign(x),
       xi=exp(log_xi),
       beta=exp(log_beta),

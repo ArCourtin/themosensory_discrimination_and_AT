@@ -6,6 +6,20 @@
 //Author: Arthur S. Courtin
 //Edited with the assistance of Claude Code (Anthropic).
 
+functions{
+  // Chained profile over the five adapting-temperature conditions: m[1]/d[1] set the level at condition 3
+  // (adapting temperature = baseline), m[2:3]/d[2:3] the outward steps toward conditions 4 and 5,
+  // m[4:5]/d[4:5] the outward steps toward conditions 2 and 1. Row c of the result is condition c.
+  matrix chain_profile(vector m, matrix d){
+    matrix[5,cols(d)] f;
+    f[3] = m[1] + d[1];
+    f[4] = f[3] + m[2] + d[2];
+    f[5] = f[4] + m[3] + d[3];
+    f[2] = f[3] + m[4] + d[4];
+    f[1] = f[2] + m[5] + d[5];
+    return f;
+  }
+}
 data{
   int N;
   int P;
@@ -14,6 +28,7 @@ data{
   vector[N] absolute_target_temperature;
   vector[N] absolute_adapting_temperature;
   vector[N] interval_sign;                       // +1 if the deviating stimulus was in the second interval, -1 if in the first
+  array[N] int<lower=1,upper=5> adapting_temperature_idx;
   array[N] int<lower=0,upper=1> chose_second;    // 1 if the participant chose the second interval
   array[N] int<lower=1,upper=P> participant;
 }
@@ -25,7 +40,8 @@ transformed data{
     deviation_from_adapting_temperature = absolute_target_temperature - absolute_adapting_temperature;
   }
 
-  int M=4;
+  int M=12;                                       // participant-hierarchy dimensions: xi, beta, 5 lambda, 5 kappa
+  int C=5;                                         // adapting-temperature conditions
 
   // beta and lambda priors come from earlier yes/no thermal detection fits (beta converted to the 2IFC scale by /sqrt(2), with that conversion's uncertainty added in quadrature).
   real beta_mean = is_cold==1 ? 0.552-30*0.0157-log(sqrt(2)) : -0.786-30*0.00239-log(sqrt(2));
@@ -44,17 +60,17 @@ parameters{
 transformed parameters{
   vector[P] xi;
   vector[P] beta;
-  vector[P] lambda;
-  vector[P] kappa;
+  matrix[C,P] lambda;
+  matrix[C,P] kappa;
   vector[N] theta;
 
   {
-    matrix[P,M] delta_participant = (diag_pre_multiply(tau, L) * z)';
+    matrix[M,P] delta_participant = diag_pre_multiply(tau, L) * z;
 
-    xi = exp(mu[1] + delta_participant[,1]);
-    beta = exp(mu[2] + delta_participant[,2]);
-    lambda = .5 * inv_logit(mu[3] + delta_participant[,3]);
-    kappa = mu[4] + delta_participant[,4];
+    xi = exp(mu[1] + delta_participant[1]');
+    beta = exp(mu[2] + delta_participant[2]');
+    lambda = .5 * inv_logit(chain_profile(mu[3:7], delta_participant[3:7]));
+    kappa = chain_profile(mu[8:12], delta_participant[8:12]);
 
     // Relative coding: the representation is referenced to the adapting temperature (complete
     // habituation), so the discrimination evidence is the soft-rectified deviation of the target
@@ -62,20 +78,27 @@ transformed parameters{
     vector[N] centered_stimulus = deviation_from_adapting_temperature - xi[participant];
     vector[N] stimulus_representation = centered_stimulus .* inv_logit(100*centered_stimulus);
 
-    theta = lambda[participant] + (1-2*lambda[participant]) .* Phi(interval_sign .* (beta[participant] .* stimulus_representation) + kappa[participant]);
+    for(n in 1:N){
+      int c = adapting_temperature_idx[n];
+      int p = participant[n];
+      theta[n] = lambda[c,p] + (1-2*lambda[c,p]) * Phi(interval_sign[n] * beta[p] * stimulus_representation[n] + kappa[c,p]);
+    }
   }
 }
 model{
   //Priors
   mu[1] ~ normal(-2,xi_sd);
   mu[2] ~ normal(beta_mean,beta_sd);
+  // lambda and kappa: mu[3]/mu[8] are the condition-3 (baseline) levels, the rest independent chained steps
   mu[3] ~ normal(lambda_mean,lambda_sd);
-  mu[4] ~ normal(0,kappa_sd);
+  mu[4:7] ~ normal(0,lambda_sd/2);
+  mu[8] ~ normal(0,kappa_sd);
+  mu[9:12] ~ normal(0,kappa_sd/2);
 
   tau[1] ~ normal(0,xi_sd);
   tau[2] ~ normal(0,beta_sd);
-  tau[3] ~ normal(0,lambda_sd);
-  tau[4] ~ normal(0,kappa_sd);
+  tau[3:7] ~ normal(0,lambda_sd);
+  tau[8:12] ~ normal(0,kappa_sd);
 
   L ~ lkj_corr_cholesky(1);
 

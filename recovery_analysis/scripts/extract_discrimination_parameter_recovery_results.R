@@ -11,6 +11,12 @@ rm(list=ls())
 # Number of simulated datasets per generative model (must match the MATLAB simulation).
 n_datasets <- 30
 
+# Group-level parameters in the order of the fitted mu and tau vectors (the fitted summaries hold mu[1..12] then tau[1..12]);
+# lambda and kappa carry one entry per AT-condition chain element: level at AT=baseline, steps toward AT 4, 5, 2, 1.
+mu_variables <- c('mu_log_xi','mu_log_beta',paste0('mu_hlogit_lambda_',1:5),paste0('mu_kappa_',1:5))
+tau_variables <- sub('^mu_','tau_',mu_variables)
+parameter_variables <- c(mu_variables,tau_variables)
+
 #### Extract and aggregate data ####
 model_data <-
   read_csv("recovery_analysis/simulated_data/absolute_model_discrimination_data.csv") %>%
@@ -31,7 +37,7 @@ model_data <-
   full_join(model_data)%>% 
   filter(trial==1,participant==1,adapting_temperature_idx==1) %>% 
   pivot_longer(
-    cols=c('mu_log_xi','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_xi','tau_log_beta','tau_hlogit_lambda','tau_kappa'),
+    cols=all_of(parameter_variables),
     names_to='variable',
     values_to = 'truth'
     )
@@ -44,7 +50,7 @@ for(dataset in 1:n_datasets){
     mutate(
       dataset=dataset,
       model='a',
-      variable=c('mu_log_xi','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_xi','tau_log_beta','tau_hlogit_lambda','tau_kappa')
+      variable=parameter_variables
       ) %>% 
     bind_rows(result_summary)
 }
@@ -53,7 +59,7 @@ for(dataset in (n_datasets+1):(2*n_datasets)){
     mutate(
       dataset=dataset,
       model='r',
-      variable=c('mu_log_xi','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_xi','tau_log_beta','tau_hlogit_lambda','tau_kappa')
+      variable=parameter_variables
     ) %>%     
     bind_rows(result_summary)
 }
@@ -63,7 +69,7 @@ pooled<-result_summary %>%
   filter(!is.na(truth)) %>% 
   mutate(
     model=factor(model,c('a','r'),c('absolute','relative')),
-    variable=factor(variable,c('mu_log_xi','mu_log_beta','mu_hlogit_lambda','mu_kappa','tau_log_xi','tau_log_beta','tau_hlogit_lambda','tau_kappa'))
+    variable=factor(variable,parameter_variables)
     )
 
 pooled %>% 
@@ -82,5 +88,5 @@ pooled %>%
   theme_classic()+
   labs(x='True value', y='Estimated value')
 
-ggsave('recovery_analysis/figures/PR_D.png',units = 'cm',width = 30,height = 20)
+ggsave('recovery_analysis/figures/PR_D.png',units = 'cm',width = 45,height = 35)
 
