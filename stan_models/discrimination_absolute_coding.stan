@@ -83,10 +83,11 @@ transformed parameters{
     // releasing sharply above it. So evidence is ~0 for target readings at or below the adapting
     // temperature, and ~(target - baseline - xi) above it. When the adapting temperature itself falls
     // below xi, the mask never engages and the model reduces to pure unmasked absolute coding.
-    vector[N] centered_target = centered_absolute_target_temperature - xi[participant];
-    vector[N] absolute_reading = centered_target .* inv_logit(100*centered_target);
-    vector[N] mask_gate = inv_logit(100*(absolute_reading - (centered_absolute_adapting_temperature - xi[participant])));
-    vector[N] stimulus_representation = absolute_reading .* mask_gate;
+    vector[N] rectified = centered_absolute_target_temperature - xi[participant];
+    vector[N] absolute_gate = inv_logit(100*rectified);
+    vector[N] absolute_evidence = rectified .* absolute_gate;
+    vector[N] adaptation_gate = inv_logit(100*(centered_absolute_target_temperature-centered_absolute_adapting_temperature));
+    vector[N] stimulus_representation = absolute_evidence .* adaptation_gate;
 
     for(n in 1:N){
       int c = adapting_temperature_idx[n];
